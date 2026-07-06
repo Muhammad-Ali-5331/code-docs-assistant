@@ -49,3 +49,8 @@ def load_code_files(repo_path):
                 except Exception as e:
                     print(f"Skipping {file_path}: {e}")
     return documents
+if __name__ == "__main__":
+    test_repo_url = "https://github.com/Muhammad-Ali-5331/skills-code-with-codespaces"
+    path = clone_repo(test_repo_url)
+    documents = load_code_files(path)
+    print(f"Loaded {len(documents)} documents from the repository.")
