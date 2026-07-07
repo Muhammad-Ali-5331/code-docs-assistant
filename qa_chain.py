@@ -5,6 +5,8 @@ from langchain_core.prompts import ChatPromptTemplate
 def build_qa_chain(vectorstore):
     """Build a question-answering chain for the given vectorstore."""
 
+    print("Building QA chain...")
+
     # Initialize the LLM and the retriever
     llm = ChatOllama(model="llama3")
 
@@ -34,12 +36,17 @@ def build_qa_chain(vectorstore):
     # It connects the retriever to the chain, allowing the model to retrieve relevant documents and then use them to answer questions.
     rag_chain = create_retrieval_chain(
         retriever=retriever,
-        combine_documents_chain=chain
+        combine_docs_chain=chain
     )
+    
+    print("QA chain built successfully.")
+    
     return rag_chain
 
 
 def ask_question(rag_chain, query):
     """Ask a question using the RAG chain and return the answer."""
+    print(f"Asking question: {query}")
     response = rag_chain.invoke({"input": query})
+    print(f"Response received, Answer: {response['answer']}")
     return response["answer"]
