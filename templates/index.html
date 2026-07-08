@@ -1,0 +1,94 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Codebase RAG Assistant</title>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500;600&family=Geist:wght@400;600;800&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+<script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+</head>
+<body>
+
+<div class="app">
+
+  <!-- ===== SIDEBAR ===== -->
+  <aside class="sidebar">
+    <div class="sidebar-section">
+      <div class="label-caps">Source Control</div>
+
+      <label class="field-label" for="repoUrl">GitHub Repository URL</label>
+      <div class="input-with-icon">
+        <span class="icon">🔗</span>
+        <input type="text" id="repoUrl" placeholder="https://github.com/user/repo" value="https://github.com/">
+      </div>
+
+      <button id="cloneBtn" class="btn-primary">
+        <span class="icon">☁️</span> Clone &amp; Index Codebase
+      </button>
+    </div>
+
+    <div class="sidebar-section steps">
+      <div class="step" id="step-clone">
+        <div class="step-dot"></div>
+        <div class="step-text">
+          <div class="step-title">Cloning Repo</div>
+          <div class="step-status">Waiting</div>
+        </div>
+      </div>
+
+      <div class="step" id="step-parse">
+        <div class="step-dot"></div>
+        <div class="step-text">
+          <div class="step-title">Loading &amp; Chunking Files</div>
+          <div class="step-status">Waiting</div>
+        </div>
+      </div>
+
+      <div class="step" id="step-vector">
+        <div class="step-dot"></div>
+        <div class="step-text">
+          <div class="step-title">Vector Store Ready</div>
+          <div class="step-status">Pending</div>
+        </div>
+      </div>
+    </div>
+  </aside>
+
+  <!-- ===== MAIN CHAT AREA ===== -->
+  <main class="main">
+    <header class="main-header">
+      <div class="header-title">
+        <span class="icon">📟</span>
+        <h1>Codebase RAG Assistant</h1>
+      </div>
+      <span class="version-chip">v1.0.4</span>
+    </header>
+
+    <div class="repo-bar">
+      <span class="icon">📁</span>
+      <span class="repo-label">Active Repository:</span>
+      <span class="repo-name" id="activeRepoName">none</span>
+      <span class="status-dot" id="statusDot"></span>
+    </div>
+
+    <section class="chat-window" id="chatWindow">
+      <div class="empty-state" id="emptyState">
+        Clone a repository from the sidebar to get started.
+      </div>
+    </section>
+
+    <footer class="composer">
+      <div class="composer-box">
+        <input type="text" id="questionInput" placeholder="Ask about your codebase..." disabled>
+        <button id="sendBtn" class="send-btn" disabled>➤</button>
+      </div>
+      <div class="composer-footer">Powered by RAG Engine v2.4 • LLaMA 3 fine-tuned</div>
+    </footer>
+  </main>
+
+</div>
+
+<script src="{{ url_for('static', filename='script.js') }}"></script>
+</body>
+</html>
