@@ -3,22 +3,40 @@ const repoUrlInput = document.getElementById("repoUrl");
 const cloneBtn = document.getElementById("cloneBtn");
 const questionInput = document.getElementById("questionInput");
 const sendBtn = document.getElementById("sendBtn");
+const stopBtn = document.getElementById("stopBtn");
 const chatWindow = document.getElementById("chatWindow");
 const emptyState = document.getElementById("emptyState");
 const activeRepoName = document.getElementById("activeRepoName");
 const statusDot = document.getElementById("statusDot");
 
+const sidebar = document.getElementById("sidebar");
+const drawerOverlay = document.getElementById("drawerOverlay");
+const openDrawerBtn = document.getElementById("openDrawerBtn");
+const closeDrawerBtn = document.getElementById("closeDrawerBtn");
+
 const stepClone = document.getElementById("step-clone");
 const stepParse = document.getElementById("step-parse");
 const stepVector = document.getElementById("step-vector");
 
-// ===== Helper: update a step's visual state =====
+// ===== Drawer (sidebar) open/close — mobile + desktop toggle =====
+function openDrawer() {
+  sidebar.classList.add("open");
+  drawerOverlay.classList.add("visible");
+}
+function closeDrawer() {
+  sidebar.classList.remove("open");
+  drawerOverlay.classList.remove("visible");
+}
+openDrawerBtn.addEventListener("click", openDrawer);
+closeDrawerBtn.addEventListener("click", closeDrawer);
+drawerOverlay.addEventListener("click", closeDrawer);
+
+// ===== Step helpers =====
 function setStep(stepEl, state, statusText) {
   stepEl.classList.remove("active", "complete");
   if (state) stepEl.classList.add(state);
   stepEl.querySelector(".step-status").textContent = statusText;
 }
-
 function resetSteps() {
   setStep(stepClone, null, "Waiting");
   setStep(stepParse, null, "Waiting");
@@ -45,11 +63,6 @@ cloneBtn.addEventListener("click", async () => {
       body: JSON.stringify({ repo_url: repoUrl }),
     });
 
-    // NOTE: this is a simple version — the backend does clone + load + chunk + embed
-    // all in one call, so we just mark all steps complete once it succeeds.
-    // If you want real step-by-step progress, the backend would need to stream
-    // status updates (e.g. via Server-Sent Events) instead of one blocking call.
-
     setStep(stepClone, "complete", "Complete");
     setStep(stepParse, "active", "Processing...");
 
@@ -59,7 +72,7 @@ cloneBtn.addEventListener("click", async () => {
       setStep(stepParse, "complete", "Complete");
       setStep(stepVector, "complete", "Ready");
 
-      activeRepoName.textContent = repoUrl.split("/").slice(-1)[0];
+      activeRepoName.textContent = repoUrl.split("/").filter(Boolean).slice(-1)[0];
       statusDot.classList.add("online");
 
       questionInput.disabled = false;
@@ -67,6 +80,7 @@ cloneBtn.addEventListener("click", async () => {
       emptyState.style.display = "none";
 
       addSystemMessage("✨ Setup complete! You can now ask questions about this codebase.");
+      closeDrawer();
     } else {
       setStep(stepParse, null, "Failed");
       alert("Error processing repo: " + (data.error || "Unknown error"));
@@ -78,7 +92,23 @@ cloneBtn.addEventListener("click", async () => {
   }
 });
 
-// ===== Send question =====
+// ===== Send / Stop question handling =====
+let currentAbortController = null;
+let timerInterval = null;
+let timerStart = null;
+
+function startTimer(statusEl) {
+  timerStart = Date.now();
+  timerInterval = setInterval(() => {
+    const seconds = ((Date.now() - timerStart) / 1000).toFixed(1);
+    statusEl.innerHTML = `Processing request... <span class="elapsed">${seconds}s</span>`;
+  }, 100);
+}
+function stopTimer() {
+  clearInterval(timerInterval);
+  timerInterval = null;
+}
+
 async function sendQuestion() {
   const question = questionInput.value.trim();
   if (!question) return;
@@ -87,33 +117,57 @@ async function sendQuestion() {
   questionInput.value = "";
   questionInput.disabled = true;
   sendBtn.disabled = true;
+  sendBtn.classList.add("hidden");
+  stopBtn.classList.remove("hidden");
 
-  showTypingIndicator();
+  const processingRow = showProcessingIndicator();
+  startTimer(processingRow.querySelector(".processing-status"));
+
+  currentAbortController = new AbortController();
 
   try {
     const response = await fetch("/ask", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ question }),
+      signal: currentAbortController.signal,
     });
     const data = await response.json();
 
-    removeTypingIndicator();
+    stopTimer();
+    processingRow.remove();
 
     if (data.answer) {
-      addAssistantMessage(data.answer, data.sources || []);
+      await typewriterAssistantMessage(data.answer, data.sources || []);
     } else {
-      addAssistantMessage("Error: " + (data.error || "Could not get an answer."), []);
+      addAssistantMessageInstant("Error: " + (data.error || "Could not get an answer."), []);
     }
   } catch (err) {
-    removeTypingIndicator();
-    addAssistantMessage("Request failed: " + err.message, []);
+    stopTimer();
+    processingRow.remove();
+
+    if (err.name === "AbortError") {
+      // User clicked stop — tell the backend to stop the in-flight generation too
+      fetch("/stop", { method: "POST" }).catch(() => {});
+      addSystemMessage("⏹ Response stopped by user.", true);
+    } else {
+      addAssistantMessageInstant("Request failed: " + err.message, []);
+    }
   } finally {
     questionInput.disabled = false;
     sendBtn.disabled = false;
+    sendBtn.classList.remove("hidden");
+    stopBtn.classList.add("hidden");
+    currentAbortController = null;
     questionInput.focus();
   }
 }
+
+stopBtn.addEventListener("click", () => {
+  if (currentAbortController) {
+    currentAbortController.abort();
+  }
+});
 
 sendBtn.addEventListener("click", sendQuestion);
 questionInput.addEventListener("keydown", (e) => {
@@ -121,37 +175,6 @@ questionInput.addEventListener("keydown", (e) => {
 });
 
 // ===== Render helpers =====
-function addSystemMessage(text) {
-  const row = document.createElement("div");
-  row.className = "system-message";
-  row.textContent = text;
-  chatWindow.appendChild(row);
-  chatWindow.scrollTop = chatWindow.scrollHeight;
-}
-
-function showTypingIndicator() {
-  const row = document.createElement("div");
-  row.className = "msg-row assistant";
-  row.id = "typingRow";
-  row.innerHTML = `
-    <div class="assistant-label">🤖 Assistant</div>
-    <div class="bubble-assistant">
-      <div class="typing-indicator">
-        <div class="typing-dot"></div>
-        <div class="typing-dot"></div>
-        <div class="typing-dot"></div>
-      </div>
-    </div>
-  `;
-  chatWindow.appendChild(row);
-  chatWindow.scrollTop = chatWindow.scrollHeight;
-}
-
-function removeTypingIndicator() {
-  const row = document.getElementById("typingRow");
-  if (row) row.remove();
-}
-
 function currentTime() {
   return new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
 }
@@ -167,7 +190,77 @@ function addUserMessage(text) {
   chatWindow.scrollTop = chatWindow.scrollHeight;
 }
 
-function addAssistantMessage(text, sources) {
+function addSystemMessage(text, isStopped = false) {
+  const row = document.createElement("div");
+  row.className = "system-message" + (isStopped ? " stopped-message" : "");
+  row.textContent = text;
+  chatWindow.appendChild(row);
+  chatWindow.scrollTop = chatWindow.scrollHeight;
+}
+
+// Shows the animated dots + "Processing request... Xs" line, returns the row element
+function showProcessingIndicator() {
+  const row = document.createElement("div");
+  row.className = "msg-row assistant";
+  row.innerHTML = `
+    <div class="assistant-label">🤖 Assistant</div>
+    <div class="bubble-assistant">
+      <div class="processing-box">
+        <div class="processing-row">
+          <div class="typing-indicator">
+            <div class="typing-dot"></div>
+            <div class="typing-dot"></div>
+            <div class="typing-dot"></div>
+          </div>
+        </div>
+        <div class="processing-status">Processing request... <span class="elapsed">0.0s</span></div>
+      </div>
+    </div>
+  `;
+  chatWindow.appendChild(row);
+  chatWindow.scrollTop = chatWindow.scrollHeight;
+  return row;
+}
+
+// Renders the final answer instantly (used for errors — no need to "type" those)
+function addAssistantMessageInstant(text, sources) {
+  const row = buildAssistantRow(marked.parse(text), sources);
+  chatWindow.appendChild(row);
+  chatWindow.scrollTop = chatWindow.scrollHeight;
+}
+
+// Renders the final answer with a typewriter effect.
+// NOTE: types the raw text (so markdown symbols are briefly visible while typing),
+// then swaps to fully rendered Markdown once typing finishes — full markdown
+// can't be safely rendered character-by-character without breaking tags mid-type.
+function typewriterAssistantMessage(text, sources) {
+  return new Promise((resolve) => {
+    const row = buildAssistantRow("", sources, true);
+    chatWindow.appendChild(row);
+    const contentEl = row.querySelector(".typed-content");
+
+    let i = 0;
+    const speed = 12; // ms per character — tweak for faster/slower typing
+
+    function typeNext() {
+      if (i < text.length) {
+        contentEl.textContent = text.slice(0, i + 1);
+        i++;
+        chatWindow.scrollTop = chatWindow.scrollHeight;
+        setTimeout(typeNext, speed);
+      } else {
+        // Typing done — swap in fully rendered Markdown (this also removes the blinking cursor)
+        row.querySelector(".bubble-assistant").innerHTML =
+          marked.parse(text) + row.querySelector(".sources-block").outerHTML;
+        chatWindow.scrollTop = chatWindow.scrollHeight;
+        resolve();
+      }
+    }
+    typeNext();
+  });
+}
+
+function buildAssistantRow(innerHtml, sources, useTypedSpan = false) {
   const row = document.createElement("div");
   row.className = "msg-row assistant";
 
@@ -182,16 +275,19 @@ function addAssistantMessage(text, sources) {
     `;
   });
 
+  const bodyHtml = useTypedSpan
+    ? `<span class="typed-content"></span><span class="typing-cursor"></span>`
+    : innerHtml;
+
   row.innerHTML = `
     <div class="assistant-label">🤖 Assistant</div>
     <div class="bubble-assistant">
-      ${marked.parse(text)}
-      ${sourcesHtml}
+      ${bodyHtml}
+      <div class="sources-block">${sourcesHtml}</div>
     </div>
     <div class="timestamp">${currentTime()}</div>
   `;
-  chatWindow.appendChild(row);
-  chatWindow.scrollTop = chatWindow.scrollHeight;
+  return row;
 }
 
 function escapeHtml(str) {
