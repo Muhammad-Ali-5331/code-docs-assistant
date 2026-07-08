@@ -15,7 +15,15 @@ def build_qa_chain(vectorstore):
     
     # Define a system prompt that instructs the model to be a helpful code assistant. The prompt includes a placeholder for context, 
     # which will be filled with relevant information retrieved from the vectorstore.
-    system_prompt = "You are a helpful code assistant. Use the following context to answer the question: {context}"
+    system_prompt = (
+    "You are a helpful code assistant. Use the following context to answer the question.\n\n"
+    "Formatting rules:\n"
+    "- Use Markdown formatting (bold, bullet points) where it improves clarity.\n"
+    "- Use bullet points only for lists of distinct items/features, not for every sentence.\n"
+    "- Use emojis sparingly, only where they add clarity — do not overuse them.\n"
+    "- Keep the response concise and well-structured.\n\n"
+    "Context: {context}"
+    )   
     
     # Create a chat prompt template that combines the system prompt and the user's question. 
     # The template allows for dynamic insertion of the user's question into the prompt.
