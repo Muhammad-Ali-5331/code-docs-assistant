@@ -48,5 +48,4 @@ def ask_question(rag_chain, query):
     """Ask a question using the RAG chain and return the answer."""
     print(f"Asking question: {query}")
     response = rag_chain.invoke({"input": query})
-    print(f"Response received, Answer: {response['answer']}")
     return response["answer"]
