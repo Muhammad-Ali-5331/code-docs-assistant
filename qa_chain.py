@@ -8,7 +8,7 @@ def build_qa_chain(vectorstore):
     print("Building QA chain...")
 
     # Initialize the LLM and the retriever
-    llm = ChatOllama(model="llama3")
+    llm = ChatOllama(model="gemma:2b")
 
     # Create a retriever from the vectorstore with a specified number of documents to retrieve (k=5)
     retriever = vectorstore.as_retriever(search_kwargs={"k": 5})
@@ -48,5 +48,4 @@ def ask_question(rag_chain, query):
     """Ask a question using the RAG chain and return the answer."""
     print(f"Asking question: {query}")
     response = rag_chain.invoke({"input": query})
-    print(f"Response received, Answer: {response['answer']}")
     return response["answer"]
