@@ -8,7 +8,7 @@ def build_qa_chain(vectorstore):
     print("Building QA chain...")
 
     # Initialize the LLM and the retriever
-    llm = ChatOllama(model="llama3")
+    llm = ChatOllama(model="gemma:2b")
 
     # Create a retriever from the vectorstore with a specified number of documents to retrieve (k=5)
     retriever = vectorstore.as_retriever(search_kwargs={"k": 5})
