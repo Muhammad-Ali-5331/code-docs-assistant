@@ -3,6 +3,7 @@ from repo_loader import clone_repo, load_code_files
 from chunker import create_chunks
 from vector_store import create_vectorstore
 from qa_chain import build_qa_chain, ask_question
+import time
 
 app = Flask(__name__)
 
@@ -17,6 +18,7 @@ def home():
 @app.route("/process_repo", methods=["POST"])
 def process_repo():
     """Process the GitHub repository URL provided by the user.""" 
+    time.sleep(1)
     data = request.json
     URL = data.get("repo_url")
     local_path = clone_repo(URL)
@@ -30,10 +32,18 @@ def process_repo():
 @app.route("/ask", methods=["POST"])
 def ask():
     """Handle the question asked by the user."""
+    time.sleep(3)
     data = request.json
     question = data.get("question")
     answer = ask_question(rag_chain, question)
     return jsonify({"answer": answer})
+
+@app.route("/stop", methods=["POST"])
+def stop():
+    """Stop the RAG chain and clean up resources."""
+    global rag_chain
+    rag_chain = None
+    return jsonify({"status": "stopped"})
 
 if __name__ == "__main__":
     app.run(debug=True,use_reloader=False)

@@ -12,11 +12,17 @@
 
 <div class="app">
 
-  <!-- ===== SIDEBAR ===== -->
-  <aside class="sidebar">
-    <div class="sidebar-section">
-      <div class="label-caps">Source Control</div>
+  <!-- ===== DRAWER OVERLAY (mobile + desktop, shown when drawer open) ===== -->
+  <div class="drawer-overlay" id="drawerOverlay"></div>
 
+  <!-- ===== SIDEBAR / DRAWER ===== -->
+  <aside class="sidebar" id="sidebar">
+    <div class="sidebar-top">
+      <span class="label-caps">Source Control</span>
+      <button class="icon-btn" id="closeDrawerBtn">✕</button>
+    </div>
+
+    <div class="sidebar-section">
       <label class="field-label" for="repoUrl">GitHub Repository URL</label>
       <div class="input-with-icon">
         <span class="icon">🔗</span>
@@ -58,6 +64,7 @@
   <!-- ===== MAIN CHAT AREA ===== -->
   <main class="main">
     <header class="main-header">
+      <button class="icon-btn hamburger" id="openDrawerBtn">☰</button>
       <div class="header-title">
         <span class="icon">📟</span>
         <h1>Codebase RAG Assistant</h1>
@@ -74,13 +81,14 @@
 
     <section class="chat-window" id="chatWindow">
       <div class="empty-state" id="emptyState">
-        Clone a repository from the sidebar to get started.
+        Tap <strong>☰</strong> and paste a repository URL to get started.
       </div>
     </section>
 
     <footer class="composer">
       <div class="composer-box">
         <input type="text" id="questionInput" placeholder="Ask about your codebase..." disabled>
+        <button id="stopBtn" class="stop-btn hidden">⏹</button>
         <button id="sendBtn" class="send-btn" disabled>➤</button>
       </div>
       <div class="composer-footer">Powered by RAG Engine v2.4 • LLaMA 3 fine-tuned</div>
