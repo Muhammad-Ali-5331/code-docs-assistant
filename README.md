@@ -53,7 +53,7 @@ This will start the Flask web application, and you can access it through your we
 To contribute to this project, please fork the repository and submit a pull request with your changes. Make sure to follow the standard professional guidelines for commit messages and code formatting.
 
 ## 📝 License
-This project is licensed under the MIT License. See the LICENSE file for more information.
+This project is licensed under the MIT License. See the [LICENSE](https://github.com/Muhammad-Ali-5331/code-docs-assistant/blob/main/LICENSE) file for more information.
 
 ## 📬 Contact
 For any questions or concerns, please contact us at [malitariq5324@gmail.com](mailto:malitariq5324@gmail.com).
