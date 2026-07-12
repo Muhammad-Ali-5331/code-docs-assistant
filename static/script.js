@@ -149,7 +149,10 @@ cloneBtn.addEventListener("click", async () => {
   try {
     const response = await fetch("/process_repo", {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${clerkToken}`,
+      },
       body: JSON.stringify({ repo_url: repoUrl }),
     });
 
@@ -218,7 +221,10 @@ async function sendQuestion() {
   try {
     const response = await fetch("/ask", {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${clerkToken}`,
+      },
       body: JSON.stringify({ question }),
       signal: currentAbortController.signal,
     });
