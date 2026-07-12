@@ -1,4 +1,4 @@
-from langchain_ollama import OllamaEmbeddings
+from langchain_huggingface import HuggingFaceEmbeddings
 from langchain_community.vectorstores import Chroma
 import os
 def create_vectorstore(chunks, persist_directory="./chroma_db"):
@@ -13,7 +13,7 @@ def create_vectorstore(chunks, persist_directory="./chroma_db"):
         os.makedirs(persist_directory)
     
     # Create the embedding model using OllamaEmbeddings with the specified model
-    embedding_model = OllamaEmbeddings(model="nomic-embed-text")
+    embedding_model = HuggingFaceEmbeddings(model_name="sentence-transformers/all-MiniLM-L6-v2")
     
     # Create the Chroma vector store from the documents (chunks) and the embedding model 
     # and persist it to the specified directory

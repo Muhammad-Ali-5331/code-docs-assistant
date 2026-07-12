@@ -5,3 +5,7 @@ langchain-classic
 langchain-text-splitters
 chromadb
 GitPython
+langchain-groq
+python-dotenv
+langchain-huggingface
+sentence-transformers
