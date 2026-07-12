@@ -3,3 +3,4 @@ chroma_db/
 target_repo/
 __pycache__/
 *.pyc
+.env
