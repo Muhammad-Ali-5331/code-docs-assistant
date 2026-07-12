@@ -1,14 +1,22 @@
-from langchain_ollama import ChatOllama
+from langchain_groq import ChatGroq
 from langchain_classic.chains import create_retrieval_chain
 from langchain_classic.chains.combine_documents import create_stuff_documents_chain
 from langchain_core.prompts import ChatPromptTemplate
+from dotenv import load_dotenv
+import os
+
+load_dotenv()
+
 def build_qa_chain(vectorstore):
     """Build a question-answering chain for the given vectorstore."""
 
     print("Building QA chain...")
 
     # Initialize the LLM and the retriever
-    llm = ChatOllama(model="gemma:2b")
+    llm = ChatGroq(
+        model="llama-3.1-8b-instant",
+        api_key=os.getenv("GROQ_API_KEY")
+    )
 
     # Create a retriever from the vectorstore with a specified number of documents to retrieve (k=5)
     retriever = vectorstore.as_retriever(search_kwargs={"k": 5})
