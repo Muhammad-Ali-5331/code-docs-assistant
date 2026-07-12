@@ -18,6 +18,96 @@ const stepClone = document.getElementById("step-clone");
 const stepParse = document.getElementById("step-parse");
 const stepVector = document.getElementById("step-vector");
 
+// ===== Clerk Auth (header-based, non-blocking) =====
+let clerkToken = null;
+let isSignedIn = false;
+
+const signInBtn = document.getElementById("signInBtn");
+const userButtonSlot = document.getElementById("userButtonSlot");
+
+// Disable app interactions until the user signs in
+function lockAppForSignedOut() {
+  isSignedIn = false;
+  repoUrlInput.disabled = true;
+  cloneBtn.disabled = true;
+  questionInput.disabled = true;
+  sendBtn.disabled = true;
+  repoUrlInput.placeholder = "Please sign in to use this app...";
+  questionInput.placeholder = "Please sign in to ask questions...";
+}
+
+// Re-enable the repo/clone controls once signed in
+// (question input stays disabled until a repo is actually processed — unchanged existing behavior)
+function unlockAppForSignedIn() {
+  isSignedIn = true;
+  repoUrlInput.disabled = false;
+  cloneBtn.disabled = false;
+  repoUrlInput.placeholder = "https://github.com/user/repo";
+  questionInput.placeholder = "Ask about your codebase...";
+}
+
+const waitForClerk = setInterval(async () => {
+  if (window.Clerk) {
+    clearInterval(waitForClerk);
+    await window.Clerk.load();
+
+    if (window.Clerk.user) {
+      clerkToken = await window.Clerk.session.getToken();
+      unlockAppForSignedIn();
+      renderUserAvatar(window.Clerk.user);
+    } else {
+      lockAppForSignedOut();
+      signInBtn.classList.remove("hidden");
+      userButtonSlot.classList.add("hidden");
+    }
+  }
+}, 100);
+
+// Build a small custom avatar + dropdown ourselves — avoids Clerk's mountUserButton(),
+// which throws "not loaded with Ui components" intermittently in plain JS setups.
+function renderUserAvatar(user) {
+  signInBtn.classList.add("hidden");
+  userButtonSlot.classList.remove("hidden");
+
+  const email = user.primaryEmailAddress ? user.primaryEmailAddress.emailAddress : "User";
+  const initial = email.charAt(0).toUpperCase();
+
+  userButtonSlot.innerHTML = `
+    <div class="avatar-wrapper" id="avatarWrapper">
+      <div class="avatar-circle">${initial}</div>
+      <div class="avatar-dropdown hidden" id="avatarDropdown">
+        <div class="avatar-email">${email}</div>
+        <button class="avatar-signout-btn" id="signOutBtn">Sign Out</button>
+      </div>
+    </div>
+  `;
+
+  const avatarWrapper = document.getElementById("avatarWrapper");
+  const avatarDropdown = document.getElementById("avatarDropdown");
+  const signOutBtn = document.getElementById("signOutBtn");
+
+  avatarWrapper.addEventListener("click", (e) => {
+    e.stopPropagation();
+    avatarDropdown.classList.toggle("hidden");
+  });
+
+  document.addEventListener("click", () => {
+    avatarDropdown.classList.add("hidden");
+  });
+
+  signOutBtn.addEventListener("click", async () => {
+    await window.Clerk.signOut();
+    window.location.reload();
+  });
+}
+
+signInBtn.addEventListener("click", () => {
+  window.Clerk.redirectToSignIn({ redirectUrl: window.location.href });
+});
+
+// Also lock the app immediately on first paint (before Clerk finishes loading)
+lockAppForSignedOut();
+
 // ===== Drawer (sidebar) open/close — mobile + desktop toggle =====
 function openDrawer() {
   sidebar.classList.add("open");

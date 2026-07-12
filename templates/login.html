@@ -1,0 +1,52 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Login - Codebase RAG Assistant</title>
+<script
+  async
+  crossorigin="anonymous"
+  data-clerk-publishable-key="pk_test_Ym9zcy1waXJhbmhhLTYyLmNsZXJrLmFjY291bnRzLmRldiQ"
+  src="https://boss-piranha-62.clerk.accounts.dev/npm/@clerk/clerk-js@6/dist/clerk.browser.js"
+  type="text/javascript"
+></script>
+<style>
+  body {
+    font-family: 'Inter', sans-serif;
+    background: #13131b;
+    color: #e4e1ed;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    height: 100vh;
+    margin: 0;
+  }
+  #status { text-align: center; font-size: 15px; }
+</style>
+</head>
+<body>
+
+<div id="status">Checking login status...</div>
+
+<script>
+  const waitForClerk = setInterval(async () => {
+    if (window.Clerk) {
+      clearInterval(waitForClerk);
+      await window.Clerk.load();
+
+      const statusEl = document.getElementById("status");
+
+      if (window.Clerk.user) {
+        const token = await window.Clerk.session.getToken();
+        console.log("Clerk session token:", token);
+        window.location.href = "/";
+      } else {
+        statusEl.textContent = "Redirecting to sign in...";
+        window.Clerk.redirectToSignIn({ redirectUrl: window.location.href });
+      }
+    }
+  }, 100);
+</script>
+
+</body>
+</html>

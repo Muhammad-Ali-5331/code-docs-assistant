@@ -10,6 +10,10 @@ app = Flask(__name__)
 # Global variable to hold the RAG chain
 rag_chain = None
 
+@app.route('/login')
+def login(): 
+    return render_template("login.html")
+
 @app.route("/")
 def home():
     """Render the home page."""
