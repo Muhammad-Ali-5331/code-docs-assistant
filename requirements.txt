@@ -4,4 +4,4 @@ langchain-ollama
 langchain-classic
 langchain-text-splitters
 chromadb
-git
+GitPython
