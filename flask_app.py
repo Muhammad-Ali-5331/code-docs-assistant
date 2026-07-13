@@ -42,23 +42,20 @@ def require_auth(f):
         return f(*args, **kwargs)
     return decorated
 
+@app.route('/favicon.ico')
+def favicon():
+    """Serve the favicon.ico file from the static directory."""
+    return send_from_directory(os.path.join(app.root_path, 'static'), 'favicon.ico', mimetype='image/vnd.microsoft.icon')
 
-@app.route("/projects")
-@require_auth
-def projects():
-    clerk_id = request.clerk_user_id
-    documents = get_user_projects(clerk_id) # Fetch the user's projects from Firestore
-    
-    result = [] # Initialize an empty list to hold the project details
-    
-    for doc in documents:
-        data = doc.to_dict()
-        result.append({
-            "project_id":doc.id,
-            "repo_url": data["repo_url"],
-            "created_at": data["created_at"].isoformat(),  # Convert datetime to ISO format string
-        })
-    return jsonify({"status":"success","projects":result})
+@app.route('/login')
+def login(): 
+    """Render the login page."""
+    return render_template("login.html")
+
+@app.route("/")
+def home():
+    """Render the home page."""
+    return render_template("index.html")
 
 @app.route("/open_project/<project_id>",methods=["POST"])
 @require_auth
@@ -79,20 +76,23 @@ def openProjects(project_id):
 
     except Exception as e:
         return jsonify({"status": "error", "message": f"Failed to retrieve user or project information: {str(e)}"}), 400
-@app.route('/favicon.ico')
-def favicon():
-    """Serve the favicon.ico file from the static directory."""
-    return send_from_directory(os.path.join(app.root_path, 'static'), 'favicon.ico', mimetype='image/vnd.microsoft.icon')
 
-@app.route('/login')
-def login(): 
-    """Render the login page."""
-    return render_template("login.html")
-
-@app.route("/")
-def home():
-    """Render the home page."""
-    return render_template("index.html")
+@app.route("/projects")
+@require_auth
+def projects():
+    clerk_id = request.clerk_user_id
+    documents = get_user_projects(clerk_id) # Fetch the user's projects from Firestore
+    
+    result = [] # Initialize an empty list to hold the project details
+    
+    for doc in documents:
+        data = doc.to_dict()
+        result.append({
+            "project_id":doc.id,
+            "repo_url": data["repo_url"],
+            "created_at": data["created_at"].isoformat(),  # Convert datetime to ISO format string
+        })
+    return jsonify({"status":"success","projects":result})
 
 @app.route("/process_repo", methods=["POST"])
 @require_auth
@@ -158,14 +158,7 @@ def ask():
 @app.route("/stop", methods=["POST"])
 @require_auth
 def stop():
-    """Clear the active project/session for this user."""
-    clerk_user_id = request.clerk_user_id
-    project_id = last_active_project.get(clerk_user_id)
-    
-    if project_id is not None:
-        rag_chains.pop((clerk_user_id, project_id), None)
-        last_active_project.pop(clerk_user_id, None)
-    
+    """Stop the current RAG chain for the user and project."""
     return jsonify({"status": "stopped"})
 
 
