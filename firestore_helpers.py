@@ -11,14 +11,14 @@ def count_user_projects(clerk_user_id):
     documents = projects.get() # Fetch all documents in the projects sub-collection
     return len(documents) # Return the count of documents (projects)
 
-def create_project(clerk_user_id, repo_url, chroma_path):
+def create_project(clerk_user_id, repo_url):
     """Create a new project for the user if they have less than 3 projects."""
     projects_count = count_user_projects(clerk_user_id) # Count the number of existing projects for the user
     if projects_count >= MAX_FREE_PROJECTS:
         return None  # User has reached the limit of 3 projects
     
     new_project_id = uuid.uuid4().hex[:8]  # Generate a new project ID
-    final_chroma_path = f"chroma_db/{clerk_user_id}/{new_project_id}"  # Define the path for Chroma data
+    final_chroma_path = f"chroma_db_{clerk_user_id}_{new_project_id}"  # Define the path for Chroma data
     
     # Save the new project details in Firestore under the user's projects sub-collection
     new_project = db.collection("users").document(clerk_user_id).collection("projects").document(new_project_id)
