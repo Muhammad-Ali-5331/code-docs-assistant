@@ -1,3 +1,5 @@
+"""Firebase Firestore Client"""
+
 import firebase_admin
 from firebase_admin import credentials, firestore
 import os
