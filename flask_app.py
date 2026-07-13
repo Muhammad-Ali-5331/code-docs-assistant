@@ -47,17 +47,17 @@ def require_auth(f):
 @require_auth
 def projects():
     clerk_id = request.clerk_user_id
-    documents = get_user_projects(clerk_id)
-    if not documents:
-        return jsonify({"status": "error", "message": f"Failed to retrieve user or projects information"}), 400
-    result = []
+    documents = get_user_projects(clerk_id) # Fetch the user's projects from Firestore
+    
+    result = [] # Initialize an empty list to hold the project details
+    
     for doc in documents:
         data = doc.to_dict()
         result.append({
             "project_id":doc.id,
             "repo_url": data["repo_url"],
-            "created_at": data["created_at"]
-            })
+            "created_at": data["created_at"].isoformat(),  # Convert datetime to ISO format string
+        })
     return jsonify({"status":"success","projects":result})
 
 @app.route("/open_project/<project_id>",methods=["POST"])
