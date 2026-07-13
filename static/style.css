@@ -120,6 +120,8 @@ button { font-family: inherit; }
   cursor: pointer;
   transition: background 0.15s ease;
   animation: slideIn 0.25s ease both;
+  overflow: hidden;
+  max-height: 60px;
 }
 .project-item:hover { background: var(--bg-3); }
 .project-item.active { background: var(--accent-soft); }
@@ -278,8 +280,113 @@ button { font-family: inherit; }
 }
 .avatar-signout-btn:hover { filter: brightness(1.1); }
 
+/* (1) Loading state for project list */
+.project-loading {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 12px 10px;
+  color: var(--text-faint);
+  font-size: 12.5px;
+}
+.mini-spinner {
+  width: 14px; height: 14px;
+  border: 2px solid var(--border);
+  border-top-color: var(--accent);
+  border-radius: 50%;
+  animation: spin 0.7s linear infinite;
+}
+@keyframes spin { to { transform: rotate(360deg); } }
+
+.text-link {
+  background: none;
+  border: none;
+  color: var(--accent-2);
+  cursor: pointer;
+  font-size: 12.5px;
+  text-decoration: underline;
+  padding: 0;
+}
+
+.project-item.deleting {
+  animation: deleteShrink 0.35s ease forwards;
+  pointer-events: none;
+}
+
+@keyframes deleteShrink {
+  0% {
+    opacity: 1;
+    transform: scale(1) translateX(0);
+    max-height: 60px;
+    margin-bottom: 0;
+  }
+  60% {
+    opacity: 0;
+    transform: scale(0.92) translateX(-8px);
+  }
+  100% {
+    opacity: 0;
+    transform: scale(0.92) translateX(-8px);
+    max-height: 0;
+    padding-top: 0;
+    padding-bottom: 0;
+    margin-bottom: 0;
+  }
+}
+
+/* Delete button on project items */
+.project-item { position: relative; }
+.project-delete-btn {
+  background: transparent;
+  border: none;
+  color: var(--text-faint);
+  font-size: 13px;
+  cursor: pointer;
+  padding: 4px 6px;
+  border-radius: 6px;
+  opacity: 0;
+  transition: opacity 0.15s ease, color 0.15s ease, background 0.15s ease;
+  flex-shrink: 0;
+}
+.project-item:hover .project-delete-btn { opacity: 1; }
+.project-delete-btn:hover { color: var(--danger); background: rgba(255,107,129,0.1); }
+
+/* (2) Sign-in required gate over the new-project panel */
+.signin-gate {
+  position: absolute;
+  inset: 0;
+  background: rgba(11,12,16,0.85);
+  backdrop-filter: blur(3px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 10;
+  animation: fadeIn 0.2s ease both;
+}
+.signin-gate-inner {
+  text-align: center;
+  max-width: 300px;
+  padding: 20px;
+}
+.signin-gate-icon { font-size: 32px; margin-bottom: 10px; }
+.signin-gate-title { font-size: 16px; font-weight: 700; margin-bottom: 6px; }
+.signin-gate-text { font-size: 13px; color: var(--text-dim); margin-bottom: 18px; line-height: 1.5; }
+
+/* (5) Inline error banner (replaces native alert on repo processing errors) */
+.np-error {
+  margin-top: 16px;
+  background: rgba(255,107,129,0.1);
+  border: 1px solid rgba(255,107,129,0.3);
+  color: var(--danger);
+  font-size: 12.5px;
+  padding: 10px 14px;
+  border-radius: var(--radius-sm);
+  animation: fadeIn 0.2s ease both;
+}
+
 /* ===== NEW PROJECT PANEL ===== */
 .new-project-panel {
+  position: relative;
   flex: 1;
   display: flex;
   align-items: center;

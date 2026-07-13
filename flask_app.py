@@ -3,12 +3,13 @@ from repo_loader import clone_repo, load_code_files
 from chunker import create_chunks
 from vector_store import create_vectorstore,load_existing_vectorstore
 from qa_chain import build_qa_chain, ask_question
-from firestore_helpers import create_project, get_user_projects,save_chat, get_user_project,get_project_chats,MAX_FREE_PROJECTS
+from firestore_helpers import create_project, get_user_projects,save_chat, get_user_project,get_project_chats,delete_user_project,MAX_FREE_PROJECTS
 from clerk_backend_api import Clerk, AuthenticateRequestOptions
 from functools import wraps
 import httpx
 import time
 import os
+import shutil
 
 clerk = Clerk(bearer_auth=os.getenv("CLERK_SECRET_KEY"))
 app = Flask(__name__)
@@ -42,23 +43,20 @@ def require_auth(f):
         return f(*args, **kwargs)
     return decorated
 
+@app.route('/favicon.ico')
+def favicon():
+    """Serve the favicon.ico file from the static directory."""
+    return send_from_directory(os.path.join(app.root_path, 'static'), 'favicon.ico', mimetype='image/vnd.microsoft.icon')
 
-@app.route("/projects")
-@require_auth
-def projects():
-    clerk_id = request.clerk_user_id
-    documents = get_user_projects(clerk_id) # Fetch the user's projects from Firestore
-    
-    result = [] # Initialize an empty list to hold the project details
-    
-    for doc in documents:
-        data = doc.to_dict()
-        result.append({
-            "project_id":doc.id,
-            "repo_url": data["repo_url"],
-            "created_at": data["created_at"].isoformat(),  # Convert datetime to ISO format string
-        })
-    return jsonify({"status":"success","projects":result})
+@app.route('/login')
+def login(): 
+    """Render the login page."""
+    return render_template("login.html")
+
+@app.route("/")
+def home():
+    """Render the home page."""
+    return render_template("index.html")
 
 @app.route("/open_project/<project_id>",methods=["POST"])
 @require_auth
@@ -79,21 +77,36 @@ def openProjects(project_id):
 
     except Exception as e:
         return jsonify({"status": "error", "message": f"Failed to retrieve user or project information: {str(e)}"}), 400
-@app.route('/favicon.ico')
-def favicon():
-    """Serve the favicon.ico file from the static directory."""
-    return send_from_directory(os.path.join(app.root_path, 'static'), 'favicon.ico', mimetype='image/vnd.microsoft.icon')
 
-@app.route('/login')
-def login(): 
-    """Render the login page."""
-    return render_template("login.html")
+@app.route("/projects")
+@require_auth
+def projects():
+    clerk_id = request.clerk_user_id
+    documents = get_user_projects(clerk_id) # Fetch the user's projects from Firestore
+    
+    result = [] # Initialize an empty list to hold the project details
+    
+    for doc in documents:
+        data = doc.to_dict()
+        result.append({
+            "project_id":doc.id,
+            "repo_url": data["repo_url"],
+            "created_at": data["created_at"].isoformat(),  # Convert datetime to ISO format string
+        })
+    return jsonify({"status":"success","projects":result})
 
-@app.route("/")
-def home():
-    """Render the home page."""
-    return render_template("index.html")
-
+@app.route("/projects/<project_id>", methods=["DELETE"])
+@require_auth
+def delete_project(project_id):
+    clerk_user_id = request.clerk_user_id
+    delete_user_project(clerk_user_id,project_id)
+    chroma_path = f"chroma_db_{clerk_user_id}_{project_id}"
+    target_repo_path = f"target_repo_{clerk_user_id}_{project_id}"
+    shutil.rmtree(target_repo_path, ignore_errors=True)  # Delete the cloned repository folder
+    shutil.rmtree(chroma_path, ignore_errors=True)  # Delete the chroma folder if it exists
+    if (clerk_user_id, project_id) in rag_chains:
+        del rag_chains[(clerk_user_id, project_id)]
+    return jsonify({"status": "success"})
 @app.route("/process_repo", methods=["POST"])
 @require_auth
 def process_repo():
@@ -158,14 +171,7 @@ def ask():
 @app.route("/stop", methods=["POST"])
 @require_auth
 def stop():
-    """Clear the active project/session for this user."""
-    clerk_user_id = request.clerk_user_id
-    project_id = last_active_project.get(clerk_user_id)
-    
-    if project_id is not None:
-        rag_chains.pop((clerk_user_id, project_id), None)
-        last_active_project.pop(clerk_user_id, None)
-    
+    """Stop the current RAG chain for the user and project."""
     return jsonify({"status": "stopped"})
 
 
