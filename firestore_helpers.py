@@ -4,12 +4,18 @@ import uuid
 
 MAX_FREE_PROJECTS = 3  # Maximum number of free projects allowed per user
 
+def get_user_projects(clerk_user_id):
+    projects = db.collection("users").document(clerk_user_id).collection("projects") # Get the projects sub-collection for the user
+    return projects.get()
+
+def get_user_project(clerk_user_id,project_id):
+    project = db.collection("users").document(clerk_user_id).collection("projects").document(project_id).get()
+    return project
+
+
 def count_user_projects(clerk_user_id):
     """Count the number of projects for a given user."""
-
-    projects = db.collection("users").document(clerk_user_id).collection("projects") # Get the projects sub-collection for the user
-    documents = projects.get() # Fetch all documents in the projects sub-collection
-    return len(documents) # Return the count of documents (projects)
+    return len(get_user_projects(clerk_user_id)) # Return the count of documents (projects)
 
 def create_project(clerk_user_id, repo_url):
     """Create a new project for the user if they have less than 3 projects."""
@@ -43,7 +49,4 @@ def get_project_chats(clerk_user_id, project_id):
     """Retrieve all chats for a specific project of a user."""
     chats_collection = db.collection("users").document(clerk_user_id).collection("projects").document(project_id).collection("chats")
     chats = chats_collection.order_by("timestamp").get()  # Fetch all chat documents ordered by timestamp
-    dict_chats = dict()  # Initialize an empty dictionary to store chat data
-    for chat in chats:
-        dict_chats[chat.id] = chat.to_dict() # Convert each chat document to a dictionary and store in dict_chats
-    return dict_chats  # Return the dictionary containing all chats for the project
+    return [chat.to_dict() for chat in chats]
