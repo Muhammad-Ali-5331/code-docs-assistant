@@ -1,7 +1,7 @@
 from firestore_client import db
 from datetime import datetime
 import uuid
-
+MAX_FREE_PROJECTS = 3  # Maximum number of free projects allowed per user
 def count_user_projects(clerk_user_id):
     """Count the number of projects for a given user."""
 
@@ -12,7 +12,7 @@ def count_user_projects(clerk_user_id):
 def create_project(clerk_user_id, repo_url, chroma_path):
     """Create a new project for the user if they have less than 3 projects."""
     projects_count = count_user_projects(clerk_user_id) # Count the number of existing projects for the user
-    if projects_count >= 3:
+    if projects_count >= MAX_FREE_PROJECTS:
         return None  # User has reached the limit of 3 projects
     project_id = uuid.uuid4().hex[:8]  # Generate a new project ID
 
