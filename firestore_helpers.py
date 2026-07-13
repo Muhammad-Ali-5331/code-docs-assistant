@@ -16,16 +16,18 @@ def create_project(clerk_user_id, repo_url, chroma_path):
     projects_count = count_user_projects(clerk_user_id) # Count the number of existing projects for the user
     if projects_count >= MAX_FREE_PROJECTS:
         return None  # User has reached the limit of 3 projects
-    project_id = uuid.uuid4().hex[:8]  # Generate a new project ID
-
+    
+    new_project_id = uuid.uuid4().hex[:8]  # Generate a new project ID
+    final_chroma_path = f"chroma_db/{clerk_user_id}/{new_project_id}"  # Define the path for Chroma data
+    
     # Save the new project details in Firestore under the user's projects sub-collection
-    projects = db.collection("users").document(clerk_user_id).collection("projects").document(project_id)
-    projects.set({
+    new_project = db.collection("users").document(clerk_user_id).collection("projects").document(new_project_id)
+    new_project.set({
         "repo_url": repo_url,
         "created_at": datetime.utcnow(),
-        "chroma_path": chroma_path
+        "chroma_path": final_chroma_path
     })
-    return project_id
+    return (new_project_id, final_chroma_path)  # Return the new project ID and Chroma path
 
 def save_chat(clerk_user_id, project_id, question, answer):
     """Save a chat (question and answer) for a specific project of a user."""
