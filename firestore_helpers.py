@@ -41,6 +41,5 @@ def get_project_chats(clerk_user_id, project_id):
     chats = chats_collection.order_by("timestamp").get()  # Fetch all chat documents ordered by timestamp
     dict_chats = dict()  # Initialize an empty dictionary to store chat data
     for chat in chats:
-        chat_dict = chat.to_dict()  # Convert each chat document to a dictionary and store in dict_chats
-        dict_chats[chat.id] = chat_dict
+        dict_chats[chat.id] = chat.to_dict() # Convert each chat document to a dictionary and store in dict_chats
     return dict_chats  # Return the dictionary containing all chats for the project
