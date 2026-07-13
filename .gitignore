@@ -1,6 +1,13 @@
 rag-env/
+.venv/
 chroma_db/
+chroma_db_*/
 target_repo/
+target_repo_*/
 __pycache__/
 *.pyc
 .env
+firebase-credentials.json
+.vscode/
+.DS_Store
+*.log
