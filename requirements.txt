@@ -9,3 +9,4 @@ langchain-groq
 python-dotenv
 langchain-huggingface
 sentence-transformers
+firebase-admin
