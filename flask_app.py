@@ -1,4 +1,4 @@
-from flask import Flask, render_template, request, jsonify
+from flask import Flask, render_template, request, jsonify,send_from_directory
 from repo_loader import clone_repo, load_code_files
 from chunker import create_chunks
 from vector_store import create_vectorstore
@@ -40,6 +40,12 @@ def require_auth(f):
 
         return f(*args, **kwargs)
     return decorated
+
+
+@app.route('/favicon.ico')
+def favicon():
+    return send_from_directory(os.path.join(app.root_path, 'static'),
+                               'favicon.ico', mimetype='image/vnd.microsoft.icon')
 
 @app.route('/login')
 def login(): 
