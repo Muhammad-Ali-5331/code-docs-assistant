@@ -1,7 +1,9 @@
 from firestore_client import db
 from datetime import datetime
 import uuid
+
 MAX_FREE_PROJECTS = 3  # Maximum number of free projects allowed per user
+
 def count_user_projects(clerk_user_id):
     """Count the number of projects for a given user."""
 
