@@ -55,3 +55,10 @@ def get_project_chats(clerk_user_id, project_id):
         chat_dict["timestamp"] = chat_dict["timestamp"].isoformat()  # Convert timestamp to ISO format string
         results.append(chat_dict)
     return results
+
+def delete_user_project(clerk_user_id, project_id):
+    """Delete a specific project for a user. This includes deleting all associated chats and the project document itself."""
+    project_ref = db.collection("users").document(clerk_user_id).collection("projects").document(project_id)
+    for chat in project_ref.collection("chats").get():  # Fetch all chat documents in the project's chats sub-collection
+        chat.reference.delete()  # Delete each chat document in the project's chats sub-collection
+    project_ref.delete()  # Delete the project document from Firestore

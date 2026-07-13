@@ -5,7 +5,6 @@ const openSideBtn = document.getElementById("openSideBtn");
 const closeSideBtn = document.getElementById("closeSideBtn");
 const newChatBtn = document.getElementById("newChatBtn");
 const projectList = document.getElementById("projectList");
-const projectEmpty = document.getElementById("projectEmpty");
 
 const topTitle = document.getElementById("topTitle");
 const signInBtn = document.getElementById("signInBtn");
@@ -37,18 +36,48 @@ async function getFreshToken() {
   return await window.Clerk.session.getToken();
 }
 
+// (2) Clear "you must sign in" gate — shown over the new-project panel when signed out
 function lockApp() {
   isSignedIn = false;
   cloneBtn.disabled = true;
   repoUrlInput.disabled = true;
+  repoUrlInput.placeholder = "Sign in to index a repository...";
   questionInput.disabled = true;
+  questionInput.placeholder = "Sign in to ask questions...";
   sendBtn.disabled = true;
+  showSignInGate();
 }
 
 function unlockApp() {
   isSignedIn = true;
   cloneBtn.disabled = false;
   repoUrlInput.disabled = false;
+  repoUrlInput.placeholder = "https://github.com/user/repo";
+  hideSignInGate();
+}
+
+function showSignInGate() {
+  let gate = document.getElementById("signInGate");
+  if (!gate) {
+    gate = document.createElement("div");
+    gate.id = "signInGate";
+    gate.className = "signin-gate";
+    gate.innerHTML = `
+      <div class="signin-gate-inner">
+        <div class="signin-gate-icon">🔒</div>
+        <div class="signin-gate-title">Sign in required</div>
+        <div class="signin-gate-text">Please sign in to index a repository and start chatting.</div>
+        <button class="cta-btn" id="gateSignInBtn">Sign In</button>
+      </div>
+    `;
+    newProjectPanel.appendChild(gate);
+    document.getElementById("gateSignInBtn").addEventListener("click", goToSignIn);
+  }
+  gate.classList.remove("hidden");
+}
+function hideSignInGate() {
+  const gate = document.getElementById("signInGate");
+  if (gate) gate.classList.add("hidden");
 }
 
 const waitForClerk = setInterval(async () => {
@@ -64,6 +93,7 @@ const waitForClerk = setInterval(async () => {
       lockApp();
       signInBtn.classList.remove("hidden");
       userButtonSlot.classList.add("hidden");
+      renderProjectList(); // show "sign in to see projects" state
     }
   }
 }, 100);
@@ -122,12 +152,21 @@ newChatBtn.addEventListener("click", () => {
   chatView.classList.add("hidden");
   newProjectPanel.classList.remove("hidden");
   resetSteps();
-  highlightActiveProject(null);
+  cloneBtn.disabled = !isSignedIn;
+  cloneBtnText.textContent = "Index Repository";
+  renderProjectList();
   closeSide();
 });
 
-// ===== Load the user's project list into the sidebar =====
+// ===== (1) Load the user's project list into the sidebar, with a loading state =====
 async function loadProjects() {
+  projectList.innerHTML = `
+    <div class="project-loading">
+      <div class="mini-spinner"></div>
+      <span>Loading projects...</span>
+    </div>
+  `;
+
   try {
     const token = await getFreshToken();
     const res = await fetch("/projects", {
@@ -137,15 +176,26 @@ async function loadProjects() {
     projectsCache = data.projects || [];
     renderProjectList();
   } catch (err) {
-    console.error("Failed to load projects:", err);
+    projectList.innerHTML = `<div class="project-empty">Couldn't load projects. <button class="text-link" onclick="loadProjects()">Retry</button></div>`;
   }
 }
 
 function renderProjectList() {
   projectList.innerHTML = "";
 
+  if (!isSignedIn) {
+    const empty = document.createElement("div");
+    empty.className = "project-empty";
+    empty.textContent = "Sign in to see your projects.";
+    projectList.appendChild(empty);
+    return;
+  }
+
   if (projectsCache.length === 0) {
-    projectList.appendChild(projectEmpty);
+    const empty = document.createElement("div");
+    empty.className = "project-empty";
+    empty.innerHTML = `No projects yet.<br>Start one with <strong>+ New Project</strong> above.`;
+    projectList.appendChild(empty);
     return;
   }
 
@@ -153,22 +203,26 @@ function renderProjectList() {
     const repoName = p.repo_url.split("/").filter(Boolean).slice(-1)[0] || p.repo_url;
     const item = document.createElement("div");
     item.className = "project-item" + (p.project_id === activeProjectId ? " active" : "");
-    item.style.animationDelay = `${index * 0.03}s`;
+    item.style.animationDelay = `${index * 0.04}s`;
     item.innerHTML = `
       <div class="project-icon">📁</div>
       <div class="project-text">
         <div class="project-name">${escapeHtml(repoName)}</div>
         <div class="project-date">${formatDate(p.created_at)}</div>
       </div>
+      <button class="project-delete-btn" title="Delete project" data-id="${p.project_id}">🗑</button>
     `;
-    item.addEventListener("click", () => openProject(p.project_id, repoName));
+    item.addEventListener("click", (e) => {
+      if (e.target.closest(".project-delete-btn")) return; // don't open when clicking delete
+      openProject(p.project_id, repoName);
+    });
+    const delBtn = item.querySelector(".project-delete-btn");
+    delBtn.addEventListener("click", (e) => {
+      e.stopPropagation();
+      confirmDeleteProject(p.project_id, repoName);
+    });
     projectList.appendChild(item);
   });
-}
-
-function highlightActiveProject(projectId) {
-  document.querySelectorAll(".project-item").forEach((el) => el.classList.remove("active"));
-  renderProjectList();
 }
 
 function formatDate(value) {
@@ -181,6 +235,46 @@ function formatDate(value) {
   }
 }
 
+// ===== (6) Delete a project =====
+function confirmDeleteProject(projectId, repoName) {
+  const ok = window.confirm(`Delete "${repoName}"? This cannot be undone.`);
+  if (!ok) return;
+  deleteProject(projectId);
+}
+
+async function deleteProject(projectId) {
+  // Play the shrink/fade-out animation on this specific item first
+  const item = document.querySelector(`.project-delete-btn[data-id="${projectId}"]`)?.closest(".project-item");
+  if (item) {
+    item.classList.add("deleting");
+    await new Promise((resolve) => setTimeout(resolve, 350)); // matches the CSS animation duration
+  }
+
+  try {
+    const token = await getFreshToken();
+    const res = await fetch(`/projects/${projectId}`, {
+      method: "DELETE",
+      headers: { Authorization: `Bearer ${token}` },
+    });
+    const data = await res.json();
+
+    if (data.status === "success") {
+      projectsCache = projectsCache.filter((p) => p.project_id !== projectId);
+      if (activeProjectId === projectId) {
+        newChatBtn.click(); // bounce back to the "new project" screen
+      } else {
+        renderProjectList();
+      }
+    } else {
+      if (item) item.classList.remove("deleting"); // restore it since delete failed
+      alert("Could not delete project: " + (data.message || "Unknown error"));
+    }
+  } catch (err) {
+    if (item) item.classList.remove("deleting");
+    alert("Request failed: " + err.message);
+  }
+}
+
 // ===== Open an existing project: reload its vector store + past chats =====
 async function openProject(projectId, repoName) {
   activeProjectId = projectId;
@@ -190,6 +284,8 @@ async function openProject(projectId, repoName) {
   newProjectPanel.classList.add("hidden");
   chatView.classList.remove("hidden");
   chatWindow.innerHTML = `<div class="sys-msg">Loading previous conversation...</div>`;
+  questionInput.disabled = true;
+  sendBtn.disabled = true;
 
   try {
     const token = await getFreshToken();
@@ -206,9 +302,10 @@ async function openProject(projectId, repoName) {
       if (chats.length === 0) {
         addSystemMessage("✨ This project is ready — ask your first question!");
       } else {
+        // (3) Use each chat's own saved timestamp, not "now"
         chats.forEach((c) => {
-          addUserMessage(c.question, false);
-          addAssistantMessageInstant(c.answer, [], false);
+          addUserMessage(c.question, false, c.timestamp);
+          addAssistantMessageInstant(c.answer, [], false, c.timestamp);
         });
       }
       questionInput.disabled = false;
@@ -279,16 +376,33 @@ cloneBtn.addEventListener("click", async () => {
       questionInput.disabled = false;
       sendBtn.disabled = false;
     } else {
-      setStep(stepParse, null);
-      alert("Error: " + (data.message || "Could not process this repository."));
+      // (5) Reset the step indicators cleanly instead of leaving them "stuck" mid-animation
+      resetSteps();
+      showInlineError(data.message || "Could not process this repository.");
     }
   } catch (err) {
-    alert("Request failed: " + err.message);
+    resetSteps();
+    showInlineError("Request failed: " + err.message);
   } finally {
-    cloneBtn.disabled = false;
+    cloneBtn.disabled = !isSignedIn;
     cloneBtnText.textContent = "Index Repository";
   }
 });
+
+// (5) Show a styled inline error banner instead of a native alert() that can leave the UI mid-state
+function showInlineError(message) {
+  let banner = document.getElementById("newProjectError");
+  if (!banner) {
+    banner = document.createElement("div");
+    banner.id = "newProjectError";
+    banner.className = "np-error";
+    document.querySelector(".np-card").appendChild(banner);
+  }
+  banner.textContent = message;
+  banner.classList.remove("hidden");
+  clearTimeout(banner._hideTimer);
+  banner._hideTimer = setTimeout(() => banner.classList.add("hidden"), 6000);
+}
 
 // ===== Ask / Stop =====
 let currentAbortController = null;
@@ -307,11 +421,21 @@ function stopTimer() {
   timerInterval = null;
 }
 
+// (4) Always fully reset the composer UI, whatever happens
+function resetComposerUI() {
+  questionInput.disabled = false;
+  sendBtn.disabled = false;
+  sendBtn.classList.remove("hidden");
+  stopBtn.classList.add("hidden");
+  currentAbortController = null;
+  questionInput.focus();
+}
+
 async function sendQuestion() {
   const question = questionInput.value.trim();
   if (!question || !activeProjectId) return;
 
-  addUserMessage(question);
+  addUserMessage(question); // live message -> stamped with "now"
   questionInput.value = "";
   questionInput.disabled = true;
   sendBtn.disabled = true;
@@ -349,6 +473,8 @@ async function sendQuestion() {
     processingRow.remove();
 
     if (err.name === "AbortError") {
+      // Tell the backend we stopped waiting — it does NOT clear the session,
+      // so the next question in this project still works normally.
       getFreshToken().then((token) => {
         fetch("/stop", {
           method: "POST",
@@ -360,12 +486,7 @@ async function sendQuestion() {
       addAssistantMessageInstant("Request failed: " + err.message, []);
     }
   } finally {
-    questionInput.disabled = false;
-    sendBtn.disabled = false;
-    sendBtn.classList.remove("hidden");
-    stopBtn.classList.add("hidden");
-    currentAbortController = null;
-    questionInput.focus();
+    resetComposerUI();
   }
 }
 
@@ -378,17 +499,19 @@ questionInput.addEventListener("keydown", (e) => {
 });
 
 // ===== Render helpers =====
-function currentTime() {
-  return new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+function formatTimestamp(isoString) {
+  const d = isoString ? new Date(isoString) : new Date();
+  return d.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
 }
 
-function addUserMessage(text, animate = true) {
+// (3) Accept an optional saved timestamp; defaults to "now" for live messages
+function addUserMessage(text, animate = true, savedTimestamp = null) {
   const row = document.createElement("div");
   row.className = "msg user";
   if (!animate) row.style.animation = "none";
   row.innerHTML = `
     <div class="bubble-user">${escapeHtml(text)}</div>
-    <div class="timestamp">${currentTime()}</div>
+    <div class="timestamp">${formatTimestamp(savedTimestamp)}</div>
   `;
   chatWindow.appendChild(row);
   chatWindow.scrollTop = chatWindow.scrollHeight;
@@ -421,15 +544,15 @@ function showProcessingIndicator() {
   return row;
 }
 
-function addAssistantMessageInstant(text, sources, animate = true) {
-  const row = buildBotRow(marked.parse(text), sources, false, animate);
+function addAssistantMessageInstant(text, sources, animate = true, savedTimestamp = null) {
+  const row = buildBotRow(marked.parse(text), sources, false, animate, savedTimestamp);
   chatWindow.appendChild(row);
   chatWindow.scrollTop = chatWindow.scrollHeight;
 }
 
 function typewriterAssistantMessage(text, sources) {
   return new Promise((resolve) => {
-    const row = buildBotRow("", sources, true, true);
+    const row = buildBotRow("", sources, true, true, null);
     chatWindow.appendChild(row);
     const contentEl = row.querySelector(".typed-content");
 
@@ -453,7 +576,7 @@ function typewriterAssistantMessage(text, sources) {
   });
 }
 
-function buildBotRow(innerHtml, sources, useTypedSpan, animate) {
+function buildBotRow(innerHtml, sources, useTypedSpan, animate, savedTimestamp) {
   const row = document.createElement("div");
   row.className = "msg bot";
   if (!animate) row.style.animation = "none";
@@ -479,7 +602,7 @@ function buildBotRow(innerHtml, sources, useTypedSpan, animate) {
       ${bodyHtml}
       <div class="sources-block">${sourcesHtml}</div>
     </div>
-    <div class="timestamp">${currentTime()}</div>
+    <div class="timestamp">${formatTimestamp(savedTimestamp)}</div>
   `;
   return row;
 }
