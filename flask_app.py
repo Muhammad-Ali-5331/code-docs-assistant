@@ -13,7 +13,6 @@ import os
 clerk = Clerk(bearer_auth=os.getenv("CLERK_SECRET_KEY"))
 app = Flask(__name__)
 
-# Global variable to hold the RAG chain
 rag_chain = dict()  # Initialize as an empty dictionary to hold RAG chains for different users/projects
 
 def require_auth(f):
