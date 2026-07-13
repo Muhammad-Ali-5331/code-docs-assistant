@@ -3,12 +3,13 @@ from repo_loader import clone_repo, load_code_files
 from chunker import create_chunks
 from vector_store import create_vectorstore,load_existing_vectorstore
 from qa_chain import build_qa_chain, ask_question
-from firestore_helpers import create_project, get_user_projects,save_chat, get_user_project,get_project_chats,MAX_FREE_PROJECTS
+from firestore_helpers import create_project, get_user_projects,save_chat, get_user_project,get_project_chats,delete_user_project,MAX_FREE_PROJECTS
 from clerk_backend_api import Clerk, AuthenticateRequestOptions
 from functools import wraps
 import httpx
 import time
 import os
+import shutil
 
 clerk = Clerk(bearer_auth=os.getenv("CLERK_SECRET_KEY"))
 app = Flask(__name__)
@@ -94,6 +95,18 @@ def projects():
         })
     return jsonify({"status":"success","projects":result})
 
+@app.route("/projects/<project_id>", methods=["DELETE"])
+@require_auth
+def delete_project(project_id):
+    clerk_user_id = request.clerk_user_id
+    delete_user_project(clerk_user_id,project_id)
+    chroma_path = f"chroma_db_{clerk_user_id}_{project_id}"
+    target_repo_path = f"target_repo_{clerk_user_id}_{project_id}"
+    shutil.rmtree(target_repo_path, ignore_errors=True)  # Delete the cloned repository folder
+    shutil.rmtree(chroma_path, ignore_errors=True)  # Delete the chroma folder if it exists
+    if (clerk_user_id, project_id) in rag_chains:
+        del rag_chains[(clerk_user_id, project_id)]
+    return jsonify({"status": "success"})
 @app.route("/process_repo", methods=["POST"])
 @require_auth
 def process_repo():
