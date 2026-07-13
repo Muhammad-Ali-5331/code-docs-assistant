@@ -3,10 +3,9 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Codebase RAG Assistant</title>
-<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500;600&family=Geist:wght@400;600;800&display=swap" rel="stylesheet">
+<title>Codebase Assistant</title>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
-<link rel="shortcut icon" href="{{ url_for('static', filename='favicon.ico') }}">
 <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
 <script
   async
@@ -18,95 +17,88 @@
 </head>
 <body>
 
-<div class="app" id="appRoot">
+<div class="shell">
 
-  <!-- ===== DRAWER OVERLAY (mobile + desktop, shown when drawer open) ===== -->
-  <div class="drawer-overlay" id="drawerOverlay"></div>
-
-  <!-- ===== SIDEBAR / DRAWER ===== -->
-  <aside class="sidebar" id="sidebar">
-    <div class="sidebar-top">
-      <span class="label-caps">Source Control</span>
-      <button class="icon-btn" id="closeDrawerBtn">✕</button>
+  <!-- ===== SIDEBAR ===== -->
+  <aside class="side" id="side">
+    <div class="side-head">
+      <div class="brand">
+        <span class="brand-dot"></span>
+        <span class="brand-name">CodeChat</span>
+      </div>
+      <button class="icon-btn only-mobile" id="closeSideBtn">✕</button>
     </div>
 
-    <div class="sidebar-section">
-      <label class="field-label" for="repoUrl">GitHub Repository URL</label>
-      <div class="input-with-icon">
-        <span class="icon">🔗</span>
-        <input type="text" id="repoUrl" placeholder="https://github.com/user/repo" value="https://github.com/">
-      </div>
+    <button class="new-chat-btn" id="newChatBtn">
+      <span class="plus">+</span> New Project
+    </button>
 
-      <button id="cloneBtn" class="btn-primary">
-        <span class="icon">☁️</span> Clone &amp; Index Codebase
-      </button>
+    <div class="side-section-label">Your Projects</div>
+
+    <div class="project-list" id="projectList">
+      <div class="project-empty" id="projectEmpty">No projects yet — start one above.</div>
     </div>
 
-    <div class="sidebar-section steps">
-      <div class="step" id="step-clone">
-        <div class="step-dot"></div>
-        <div class="step-text">
-          <div class="step-title">Cloning Repo</div>
-          <div class="step-status">Waiting</div>
-        </div>
-      </div>
-
-      <div class="step" id="step-parse">
-        <div class="step-dot"></div>
-        <div class="step-text">
-          <div class="step-title">Loading &amp; Chunking Files</div>
-          <div class="step-status">Waiting</div>
-        </div>
-      </div>
-
-      <div class="step" id="step-vector">
-        <div class="step-dot"></div>
-        <div class="step-text">
-          <div class="step-title">Vector Store Ready</div>
-          <div class="step-status">Pending</div>
-        </div>
-      </div>
+    <div class="side-foot">
+      <button class="icon-btn only-mobile" id="signInBtnMobile">Sign In</button>
     </div>
   </aside>
 
-  <!-- ===== MAIN CHAT AREA ===== -->
-  <main class="main">
-    <header class="main-header">
-      <button class="icon-btn hamburger" id="openDrawerBtn">☰</button>
-      <div class="header-title">
-        <span class="icon">📟</span>
-        <h1>Codebase RAG Assistant</h1>
-      </div>
-      <span class="version-chip">v1.0.4</span>
+  <div class="side-overlay" id="sideOverlay"></div>
 
-      <div class="auth-area" id="authArea">
-        <button id="signInBtn" class="btn-signin">🔐 Sign In</button>
-        <div id="userButtonSlot" class="user-button-slot hidden"></div>
+  <!-- ===== MAIN ===== -->
+  <main class="main">
+
+    <header class="top-bar">
+      <button class="icon-btn only-mobile" id="openSideBtn">☰</button>
+      <div class="top-title" id="topTitle">New Project</div>
+      <div class="top-actions">
+        <button id="signInBtn" class="pill-btn">Sign In</button>
+        <div id="userButtonSlot" class="user-slot hidden"></div>
       </div>
     </header>
 
-    <div class="repo-bar">
-      <span class="icon">📁</span>
-      <span class="repo-label">Active Repository:</span>
-      <span class="repo-name" id="activeRepoName">none</span>
-      <span class="status-dot" id="statusDot"></span>
-    </div>
+    <!-- ===== NEW PROJECT PANEL (shown when no project is open) ===== -->
+    <section class="new-project-panel" id="newProjectPanel">
+      <div class="np-card">
+        <div class="np-icon">📂</div>
+        <h2>Point me at a GitHub repo</h2>
+        <p>Paste a public repository URL and I'll index it so you can ask questions about the code.</p>
 
-    <section class="chat-window" id="chatWindow">
-      <div class="empty-state" id="emptyState">
-        Tap <strong>☰</strong> and paste a repository URL to get started.
+        <div class="np-input-row">
+          <span class="np-input-icon">🔗</span>
+          <input type="text" id="repoUrl" placeholder="https://github.com/user/repo">
+        </div>
+
+        <button id="cloneBtn" class="cta-btn">
+          <span id="cloneBtnText">Index Repository</span>
+        </button>
+
+        <div class="np-steps" id="npSteps">
+          <div class="np-step" id="step-clone"><span class="np-step-dot"></span> Cloning repository</div>
+          <div class="np-step" id="step-parse"><span class="np-step-dot"></span> Reading &amp; chunking files</div>
+          <div class="np-step" id="step-vector"><span class="np-step-dot"></span> Building vector index</div>
+        </div>
       </div>
     </section>
 
-    <footer class="composer">
-      <div class="composer-box">
-        <input type="text" id="questionInput" placeholder="Ask about your codebase..." disabled>
-        <button id="stopBtn" class="stop-btn hidden">⏹</button>
-        <button id="sendBtn" class="send-btn" disabled>➤</button>
-      </div>
-    </footer>
-  </main>
+    <!-- ===== CHAT VIEW (shown when a project is open) ===== -->
+    <section class="chat-view hidden" id="chatView">
+      <div class="chat-scroll" id="chatWindow"></div>
 
+      <footer class="composer">
+        <div class="composer-inner">
+          <input type="text" id="questionInput" placeholder="Ask about your codebase...">
+          <button id="stopBtn" class="round-btn stop hidden">⏹</button>
+          <button id="sendBtn" class="round-btn send">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none"><path d="M4 12L20 4L14 20L11 13L4 12Z" fill="currentColor"/></svg>
+          </button>
+        </div>
+        <div class="composer-hint">Press Enter to send</div>
+      </footer>
+    </section>
+
+  </main>
 </div>
 
 <script src="{{ url_for('static', filename='script.js') }}"></script>
