@@ -1,9 +1,9 @@
 from flask import Flask, render_template, request, jsonify,send_from_directory
 from repo_loader import clone_repo, load_code_files
 from chunker import create_chunks
-from vector_store import create_vectorstore
+from vector_store import create_vectorstore,load_existing_vectorstore
 from qa_chain import build_qa_chain, ask_question
-from firestore_helpers import create_project, count_user_projects, save_chat, MAX_FREE_PROJECTS
+from firestore_helpers import create_project, get_user_projects,save_chat, get_user_project,get_project_chats,MAX_FREE_PROJECTS
 from clerk_backend_api import Clerk, AuthenticateRequestOptions
 from functools import wraps
 import httpx
@@ -43,6 +43,42 @@ def require_auth(f):
     return decorated
 
 
+@app.route("/projects")
+@require_auth
+def projects():
+    clerk_id = request.clerk_user_id
+    documents = get_user_projects(clerk_id)
+    if not documents:
+        return jsonify({"status": "error", "message": f"Failed to retrieve user or projects information"}), 400
+    result = []
+    for doc in documents:
+        data = doc.to_dict()
+        result.append({
+            "project_id":doc.id,
+            "repo_url": data["repo_url"],
+            "created_at": data["created_at"]
+            })
+    return jsonify({"status":"success","projects":result})
+
+@app.route("/open_project/<project_id>",methods=["POST"])
+@require_auth
+def openProjects(project_id):
+    try:
+        clerk_user_id = request.clerk_user_id
+        doc = get_user_project(clerk_user_id,project_id)
+        if doc.exists:
+            data = doc.to_dict()
+            chroma_path = data["chroma_path"]
+            vectorStore_obj = load_existing_vectorstore(chroma_path)
+            rag_chains[(clerk_user_id,project_id)] = build_qa_chain(vectorStore_obj)
+            last_active_project[clerk_user_id] = project_id
+            chat_list = get_project_chats(clerk_user_id,project_id)
+            return jsonify({"status":"success","chats":chat_list})
+        else: 
+            return jsonify({"status": "error", "message": f"Failed to retrieve user or project information - No project exists."}), 400
+
+    except Exception as e:
+        return jsonify({"status": "error", "message": f"Failed to retrieve user or project information: {str(e)}"}), 400
 @app.route('/favicon.ico')
 def favicon():
     """Serve the favicon.ico file from the static directory."""

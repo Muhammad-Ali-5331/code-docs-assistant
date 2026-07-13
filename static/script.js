@@ -1,49 +1,54 @@
 // ===== Element references =====
+const side = document.getElementById("side");
+const sideOverlay = document.getElementById("sideOverlay");
+const openSideBtn = document.getElementById("openSideBtn");
+const closeSideBtn = document.getElementById("closeSideBtn");
+const newChatBtn = document.getElementById("newChatBtn");
+const projectList = document.getElementById("projectList");
+const projectEmpty = document.getElementById("projectEmpty");
+
+const topTitle = document.getElementById("topTitle");
+const signInBtn = document.getElementById("signInBtn");
+const signInBtnMobile = document.getElementById("signInBtnMobile");
+const userButtonSlot = document.getElementById("userButtonSlot");
+
+const newProjectPanel = document.getElementById("newProjectPanel");
+const chatView = document.getElementById("chatView");
 const repoUrlInput = document.getElementById("repoUrl");
 const cloneBtn = document.getElementById("cloneBtn");
-const questionInput = document.getElementById("questionInput");
-const sendBtn = document.getElementById("sendBtn");
-const stopBtn = document.getElementById("stopBtn");
-const chatWindow = document.getElementById("chatWindow");
-const emptyState = document.getElementById("emptyState");
-const activeRepoName = document.getElementById("activeRepoName");
-const statusDot = document.getElementById("statusDot");
-
-const sidebar = document.getElementById("sidebar");
-const drawerOverlay = document.getElementById("drawerOverlay");
-const openDrawerBtn = document.getElementById("openDrawerBtn");
-const closeDrawerBtn = document.getElementById("closeDrawerBtn");
+const cloneBtnText = document.getElementById("cloneBtnText");
 
 const stepClone = document.getElementById("step-clone");
 const stepParse = document.getElementById("step-parse");
 const stepVector = document.getElementById("step-vector");
 
-// ===== Clerk Auth (header-based, non-blocking) =====
-let clerkToken = null;
+const chatWindow = document.getElementById("chatWindow");
+const questionInput = document.getElementById("questionInput");
+const sendBtn = document.getElementById("sendBtn");
+const stopBtn = document.getElementById("stopBtn");
+
+// ===== State =====
 let isSignedIn = false;
+let activeProjectId = null;
+let projectsCache = [];
 
-const signInBtn = document.getElementById("signInBtn");
-const userButtonSlot = document.getElementById("userButtonSlot");
-
-// Disable app interactions until the user signs in
-function lockAppForSignedOut() {
-  isSignedIn = false;
-  repoUrlInput.disabled = true;
-  cloneBtn.disabled = true;
-  questionInput.disabled = true;
-  sendBtn.disabled = true;
-  repoUrlInput.placeholder = "Please sign in to use this app...";
-  questionInput.placeholder = "Please sign in to ask questions...";
+// ===== Auth =====
+async function getFreshToken() {
+  return await window.Clerk.session.getToken();
 }
 
-// Re-enable the repo/clone controls once signed in
-// (question input stays disabled until a repo is actually processed — unchanged existing behavior)
-function unlockAppForSignedIn() {
+function lockApp() {
+  isSignedIn = false;
+  cloneBtn.disabled = true;
+  repoUrlInput.disabled = true;
+  questionInput.disabled = true;
+  sendBtn.disabled = true;
+}
+
+function unlockApp() {
   isSignedIn = true;
-  repoUrlInput.disabled = false;
   cloneBtn.disabled = false;
-  repoUrlInput.placeholder = "https://github.com/user/repo";
-  questionInput.placeholder = "Ask about your codebase...";
+  repoUrlInput.disabled = false;
 }
 
 const waitForClerk = setInterval(async () => {
@@ -52,19 +57,17 @@ const waitForClerk = setInterval(async () => {
     await window.Clerk.load();
 
     if (window.Clerk.user) {
-      clerkToken = await window.Clerk.session.getToken();
-      unlockAppForSignedIn();
+      unlockApp();
       renderUserAvatar(window.Clerk.user);
+      loadProjects();
     } else {
-      lockAppForSignedOut();
+      lockApp();
       signInBtn.classList.remove("hidden");
       userButtonSlot.classList.add("hidden");
     }
   }
 }, 100);
 
-// Build a small custom avatar + dropdown ourselves — avoids Clerk's mountUserButton(),
-// which throws "not loaded with Ui components" intermittently in plain JS setups.
 function renderUserAvatar(user) {
   signInBtn.classList.add("hidden");
   userButtonSlot.classList.remove("hidden");
@@ -90,102 +93,204 @@ function renderUserAvatar(user) {
     e.stopPropagation();
     avatarDropdown.classList.toggle("hidden");
   });
-
-  document.addEventListener("click", () => {
-    avatarDropdown.classList.add("hidden");
-  });
-
+  document.addEventListener("click", () => avatarDropdown.classList.add("hidden"));
   signOutBtn.addEventListener("click", async () => {
     await window.Clerk.signOut();
     window.location.reload();
   });
 }
 
-signInBtn.addEventListener("click", () => {
+function goToSignIn() {
   window.Clerk.redirectToSignIn({ redirectUrl: window.location.href });
+}
+signInBtn.addEventListener("click", goToSignIn);
+signInBtnMobile.addEventListener("click", goToSignIn);
+
+// ===== Sidebar drawer (mobile) =====
+function openSide() { side.classList.add("open"); sideOverlay.classList.add("visible"); }
+function closeSide() { side.classList.remove("open"); sideOverlay.classList.remove("visible"); }
+openSideBtn.addEventListener("click", openSide);
+closeSideBtn.addEventListener("click", closeSide);
+sideOverlay.addEventListener("click", closeSide);
+
+// ===== "New Project" resets the view to the empty state =====
+newChatBtn.addEventListener("click", () => {
+  activeProjectId = null;
+  repoUrlInput.value = "";
+  topTitle.textContent = "New Project";
+  chatWindow.innerHTML = "";
+  chatView.classList.add("hidden");
+  newProjectPanel.classList.remove("hidden");
+  resetSteps();
+  highlightActiveProject(null);
+  closeSide();
 });
 
-// Also lock the app immediately on first paint (before Clerk finishes loading)
-lockAppForSignedOut();
-
-// ===== Drawer (sidebar) open/close — mobile + desktop toggle =====
-function openDrawer() {
-  sidebar.classList.add("open");
-  drawerOverlay.classList.add("visible");
-}
-function closeDrawer() {
-  sidebar.classList.remove("open");
-  drawerOverlay.classList.remove("visible");
-}
-openDrawerBtn.addEventListener("click", openDrawer);
-closeDrawerBtn.addEventListener("click", closeDrawer);
-drawerOverlay.addEventListener("click", closeDrawer);
-
-// ===== Step helpers =====
-function setStep(stepEl, state, statusText) {
-  stepEl.classList.remove("active", "complete");
-  if (state) stepEl.classList.add(state);
-  stepEl.querySelector(".step-status").textContent = statusText;
-}
-function resetSteps() {
-  setStep(stepClone, null, "Waiting");
-  setStep(stepParse, null, "Waiting");
-  setStep(stepVector, null, "Pending");
+// ===== Load the user's project list into the sidebar =====
+async function loadProjects() {
+  try {
+    const token = await getFreshToken();
+    const res = await fetch("/projects", {
+      headers: { Authorization: `Bearer ${token}` },
+    });
+    const data = await res.json();
+    projectsCache = data.projects || [];
+    renderProjectList();
+  } catch (err) {
+    console.error("Failed to load projects:", err);
+  }
 }
 
-// ===== Clone & Index button =====
-cloneBtn.addEventListener("click", async () => {
-  const repoUrl = repoUrlInput.value.trim();
-  if (!repoUrl) return;
+function renderProjectList() {
+  projectList.innerHTML = "";
 
-  cloneBtn.disabled = true;
-  questionInput.disabled = true;
-  sendBtn.disabled = true;
-  statusDot.classList.remove("online");
+  if (projectsCache.length === 0) {
+    projectList.appendChild(projectEmpty);
+    return;
+  }
 
-  resetSteps();
-  setStep(stepClone, "active", "Cloning...");
+  projectsCache.forEach((p, index) => {
+    const repoName = p.repo_url.split("/").filter(Boolean).slice(-1)[0] || p.repo_url;
+    const item = document.createElement("div");
+    item.className = "project-item" + (p.project_id === activeProjectId ? " active" : "");
+    item.style.animationDelay = `${index * 0.03}s`;
+    item.innerHTML = `
+      <div class="project-icon">📁</div>
+      <div class="project-text">
+        <div class="project-name">${escapeHtml(repoName)}</div>
+        <div class="project-date">${formatDate(p.created_at)}</div>
+      </div>
+    `;
+    item.addEventListener("click", () => openProject(p.project_id, repoName));
+    projectList.appendChild(item);
+  });
+}
+
+function highlightActiveProject(projectId) {
+  document.querySelectorAll(".project-item").forEach((el) => el.classList.remove("active"));
+  renderProjectList();
+}
+
+function formatDate(value) {
+  if (!value) return "";
+  try {
+    const d = new Date(value);
+    return d.toLocaleDateString([], { month: "short", day: "numeric" });
+  } catch {
+    return "";
+  }
+}
+
+// ===== Open an existing project: reload its vector store + past chats =====
+async function openProject(projectId, repoName) {
+  activeProjectId = projectId;
+  topTitle.textContent = repoName;
+  renderProjectList();
+
+  newProjectPanel.classList.add("hidden");
+  chatView.classList.remove("hidden");
+  chatWindow.innerHTML = `<div class="sys-msg">Loading previous conversation...</div>`;
 
   try {
+    const token = await getFreshToken();
+    const res = await fetch(`/open_project/${projectId}`, {
+      method: "POST",
+      headers: { Authorization: `Bearer ${token}` },
+    });
+    const data = await res.json();
+
+    chatWindow.innerHTML = "";
+
+    if (data.status === "success") {
+      const chats = data.chats || [];
+      if (chats.length === 0) {
+        addSystemMessage("✨ This project is ready — ask your first question!");
+      } else {
+        chats.forEach((c) => {
+          addUserMessage(c.question, false);
+          addAssistantMessageInstant(c.answer, [], false);
+        });
+      }
+      questionInput.disabled = false;
+      sendBtn.disabled = false;
+    } else {
+      addSystemMessage("Error: " + (data.message || "Could not open this project."), true);
+    }
+  } catch (err) {
+    chatWindow.innerHTML = "";
+    addSystemMessage("Request failed: " + err.message, true);
+  }
+
+  closeSide();
+}
+
+// ===== Steps helpers (new project indexing flow) =====
+function setStep(stepEl, state) {
+  stepEl.classList.remove("active", "complete");
+  if (state) stepEl.classList.add(state);
+}
+function resetSteps() {
+  setStep(stepClone, null);
+  setStep(stepParse, null);
+  setStep(stepVector, null);
+}
+
+// ===== Index a new repository =====
+cloneBtn.addEventListener("click", async () => {
+  const repoUrl = repoUrlInput.value.trim();
+  if (!repoUrl || !isSignedIn) return;
+
+  cloneBtn.disabled = true;
+  cloneBtnText.textContent = "Indexing...";
+  resetSteps();
+  setStep(stepClone, "active");
+
+  try {
+    const token = await getFreshToken();
     const response = await fetch("/process_repo", {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
-        Authorization: `Bearer ${clerkToken}`,
+        Authorization: `Bearer ${token}`,
       },
       body: JSON.stringify({ repo_url: repoUrl }),
     });
 
-    setStep(stepClone, "complete", "Complete");
-    setStep(stepParse, "active", "Processing...");
-
+    setStep(stepClone, "complete");
+    setStep(stepParse, "active");
     const data = await response.json();
+    setStep(stepParse, "complete");
+    setStep(stepVector, "active");
 
     if (data.status === "success") {
-      setStep(stepParse, "complete", "Complete");
-      setStep(stepVector, "complete", "Ready");
+      setStep(stepVector, "complete");
+      activeProjectId = data.project_id;
 
-      activeRepoName.textContent = repoUrl.split("/").filter(Boolean).slice(-1)[0];
-      statusDot.classList.add("online");
+      const repoName = repoUrl.split("/").filter(Boolean).slice(-1)[0];
+      topTitle.textContent = repoName;
+
+      await loadProjects();
+
+      newProjectPanel.classList.add("hidden");
+      chatView.classList.remove("hidden");
+      chatWindow.innerHTML = "";
+      addSystemMessage("✨ Setup complete! Ask me anything about this codebase.");
 
       questionInput.disabled = false;
       sendBtn.disabled = false;
-      emptyState.style.display = "none";
-
-      addSystemMessage("✨ Setup complete! You can now ask questions about this codebase.");
-      closeDrawer();
     } else {
-      setStep(stepParse, null, "Failed");
-      alert("Error processing repo: " + (data.error || "Unknown error"));
+      setStep(stepParse, null);
+      alert("Error: " + (data.message || "Could not process this repository."));
     }
   } catch (err) {
     alert("Request failed: " + err.message);
   } finally {
     cloneBtn.disabled = false;
+    cloneBtnText.textContent = "Index Repository";
   }
 });
 
-// ===== Send / Stop question handling =====
+// ===== Ask / Stop =====
 let currentAbortController = null;
 let timerInterval = null;
 let timerStart = null;
@@ -194,7 +299,7 @@ function startTimer(statusEl) {
   timerStart = Date.now();
   timerInterval = setInterval(() => {
     const seconds = ((Date.now() - timerStart) / 1000).toFixed(1);
-    statusEl.innerHTML = `Processing request... <span class="elapsed">${seconds}s</span>`;
+    statusEl.innerHTML = `Thinking... <span class="elapsed">${seconds}s</span>`;
   }, 100);
 }
 function stopTimer() {
@@ -204,7 +309,7 @@ function stopTimer() {
 
 async function sendQuestion() {
   const question = questionInput.value.trim();
-  if (!question) return;
+  if (!question || !activeProjectId) return;
 
   addUserMessage(question);
   questionInput.value = "";
@@ -214,16 +319,17 @@ async function sendQuestion() {
   stopBtn.classList.remove("hidden");
 
   const processingRow = showProcessingIndicator();
-  startTimer(processingRow.querySelector(".processing-status"));
+  startTimer(processingRow.querySelector(".proc-status"));
 
   currentAbortController = new AbortController();
 
   try {
+    const token = await getFreshToken();
     const response = await fetch("/ask", {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
-        Authorization: `Bearer ${clerkToken}`,
+        Authorization: `Bearer ${token}`,
       },
       body: JSON.stringify({ question }),
       signal: currentAbortController.signal,
@@ -236,16 +342,20 @@ async function sendQuestion() {
     if (data.answer) {
       await typewriterAssistantMessage(data.answer, data.sources || []);
     } else {
-      addAssistantMessageInstant("Error: " + (data.error || "Could not get an answer."), []);
+      addAssistantMessageInstant("Error: " + (data.message || "Could not get an answer."), []);
     }
   } catch (err) {
     stopTimer();
     processingRow.remove();
 
     if (err.name === "AbortError") {
-      // User clicked stop — tell the backend to stop the in-flight generation too
-      fetch("/stop", { method: "POST" }).catch(() => {});
-      addSystemMessage("⏹ Response stopped by user.", true);
+      getFreshToken().then((token) => {
+        fetch("/stop", {
+          method: "POST",
+          headers: { Authorization: `Bearer ${token}` },
+        }).catch(() => {});
+      });
+      addSystemMessage("⏹ Response stopped.", true);
     } else {
       addAssistantMessageInstant("Request failed: " + err.message, []);
     }
@@ -260,11 +370,8 @@ async function sendQuestion() {
 }
 
 stopBtn.addEventListener("click", () => {
-  if (currentAbortController) {
-    currentAbortController.abort();
-  }
+  if (currentAbortController) currentAbortController.abort();
 });
-
 sendBtn.addEventListener("click", sendQuestion);
 questionInput.addEventListener("keydown", (e) => {
   if (e.key === "Enter") sendQuestion();
@@ -275,9 +382,10 @@ function currentTime() {
   return new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
 }
 
-function addUserMessage(text) {
+function addUserMessage(text, animate = true) {
   const row = document.createElement("div");
-  row.className = "msg-row user";
+  row.className = "msg user";
+  if (!animate) row.style.animation = "none";
   row.innerHTML = `
     <div class="bubble-user">${escapeHtml(text)}</div>
     <div class="timestamp">${currentTime()}</div>
@@ -286,30 +394,25 @@ function addUserMessage(text) {
   chatWindow.scrollTop = chatWindow.scrollHeight;
 }
 
-function addSystemMessage(text, isStopped = false) {
+function addSystemMessage(text, isError = false) {
   const row = document.createElement("div");
-  row.className = "system-message" + (isStopped ? " stopped-message" : "");
+  row.className = "sys-msg" + (isError ? " error-msg" : "");
   row.textContent = text;
   chatWindow.appendChild(row);
   chatWindow.scrollTop = chatWindow.scrollHeight;
 }
 
-// Shows the animated dots + "Processing request... Xs" line, returns the row element
 function showProcessingIndicator() {
   const row = document.createElement("div");
-  row.className = "msg-row assistant";
+  row.className = "msg bot";
   row.innerHTML = `
-    <div class="assistant-label">🤖 Assistant</div>
-    <div class="bubble-assistant">
-      <div class="processing-box">
-        <div class="processing-row">
-          <div class="typing-indicator">
-            <div class="typing-dot"></div>
-            <div class="typing-dot"></div>
-            <div class="typing-dot"></div>
-          </div>
+    <div class="bot-label">🤖 Assistant</div>
+    <div class="bubble-bot">
+      <div class="proc-box">
+        <div class="proc-dots">
+          <div class="proc-dot"></div><div class="proc-dot"></div><div class="proc-dot"></div>
         </div>
-        <div class="processing-status">Processing request... <span class="elapsed">0.0s</span></div>
+        <div class="proc-status">Thinking... <span class="elapsed">0.0s</span></div>
       </div>
     </div>
   `;
@@ -318,25 +421,20 @@ function showProcessingIndicator() {
   return row;
 }
 
-// Renders the final answer instantly (used for errors — no need to "type" those)
-function addAssistantMessageInstant(text, sources) {
-  const row = buildAssistantRow(marked.parse(text), sources);
+function addAssistantMessageInstant(text, sources, animate = true) {
+  const row = buildBotRow(marked.parse(text), sources, false, animate);
   chatWindow.appendChild(row);
   chatWindow.scrollTop = chatWindow.scrollHeight;
 }
 
-// Renders the final answer with a typewriter effect.
-// NOTE: types the raw text (so markdown symbols are briefly visible while typing),
-// then swaps to fully rendered Markdown once typing finishes — full markdown
-// can't be safely rendered character-by-character without breaking tags mid-type.
 function typewriterAssistantMessage(text, sources) {
   return new Promise((resolve) => {
-    const row = buildAssistantRow("", sources, true);
+    const row = buildBotRow("", sources, true, true);
     chatWindow.appendChild(row);
     const contentEl = row.querySelector(".typed-content");
 
     let i = 0;
-    const speed = 12; // ms per character — tweak for faster/slower typing
+    const speed = 10;
 
     function typeNext() {
       if (i < text.length) {
@@ -345,8 +443,7 @@ function typewriterAssistantMessage(text, sources) {
         chatWindow.scrollTop = chatWindow.scrollHeight;
         setTimeout(typeNext, speed);
       } else {
-        // Typing done — swap in fully rendered Markdown (this also removes the blinking cursor)
-        row.querySelector(".bubble-assistant").innerHTML =
+        row.querySelector(".bubble-bot").innerHTML =
           marked.parse(text) + row.querySelector(".sources-block").outerHTML;
         chatWindow.scrollTop = chatWindow.scrollHeight;
         resolve();
@@ -356,17 +453,18 @@ function typewriterAssistantMessage(text, sources) {
   });
 }
 
-function buildAssistantRow(innerHtml, sources, useTypedSpan = false) {
+function buildBotRow(innerHtml, sources, useTypedSpan, animate) {
   const row = document.createElement("div");
-  row.className = "msg-row assistant";
+  row.className = "msg bot";
+  if (!animate) row.style.animation = "none";
 
   let sourcesHtml = "";
-  sources.forEach((src) => {
+  (sources || []).forEach((src) => {
     sourcesHtml += `
       <div class="source-chip">
         <span>🔍</span>
         <span>${escapeHtml(src.file)}</span>
-        <span class="relevance-tag">RELEVANCE: ${src.score}</span>
+        <span class="relevance-tag">${src.score}</span>
       </div>
     `;
   });
@@ -376,8 +474,8 @@ function buildAssistantRow(innerHtml, sources, useTypedSpan = false) {
     : innerHtml;
 
   row.innerHTML = `
-    <div class="assistant-label">🤖 Assistant</div>
-    <div class="bubble-assistant">
+    <div class="bot-label">🤖 Assistant</div>
+    <div class="bubble-bot">
       ${bodyHtml}
       <div class="sources-block">${sourcesHtml}</div>
     </div>
