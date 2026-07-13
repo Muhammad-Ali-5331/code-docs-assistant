@@ -4,3 +4,4 @@ target_repo/
 __pycache__/
 *.pyc
 .env
+firebase-credentials.json
