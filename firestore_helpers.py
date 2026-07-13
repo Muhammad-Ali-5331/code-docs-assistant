@@ -49,4 +49,9 @@ def get_project_chats(clerk_user_id, project_id):
     """Retrieve all chats for a specific project of a user."""
     chats_collection = db.collection("users").document(clerk_user_id).collection("projects").document(project_id).collection("chats")
     chats = chats_collection.order_by("timestamp").get()  # Fetch all chat documents ordered by timestamp
-    return [chat.to_dict() for chat in chats]
+    results = []
+    for chat in chats:
+        chat_dict = chat.to_dict()
+        chat_dict["timestamp"] = chat_dict["timestamp"].isoformat()  # Convert timestamp to ISO format string
+        results.append(chat_dict)
+    return results
