@@ -15,11 +15,6 @@ app = Flask(__name__)
 # Global variable to hold the RAG chain
 rag_chain = None
 
-@app.route('/favicon.ico')
-def favicon():
-    return send_from_directory(os.path.join(app.root_path, 'static'),
-                               'favicon.ico', mimetype='image/vnd.microsoft.icon')
-
 def require_auth(f):
     @wraps(f)
     def decorated(*args, **kwargs):
@@ -46,6 +41,11 @@ def require_auth(f):
         return f(*args, **kwargs)
     return decorated
 
+
+@app.route('/favicon.ico')
+def favicon():
+    return send_from_directory(os.path.join(app.root_path, 'static'),
+                               'favicon.ico', mimetype='image/vnd.microsoft.icon')
 
 @app.route('/login')
 def login(): 
