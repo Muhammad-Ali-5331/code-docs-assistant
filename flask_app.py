@@ -3,9 +3,10 @@ from repo_loader import clone_repo, load_code_files
 from chunker import create_chunks
 from vector_store import create_vectorstore
 from qa_chain import build_qa_chain, ask_question
-import httpx
+from firestore_helpers import create_project, count_user_projects, save_chat, MAX_PROJECTS
 from clerk_backend_api import Clerk, AuthenticateRequestOptions
 from functools import wraps
+import httpx
 import time
 import os
 
