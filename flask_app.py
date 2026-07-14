@@ -7,7 +7,6 @@ from firestore_helpers import create_project, get_user_projects,save_chat, get_u
 from clerk_backend_api import Clerk, AuthenticateRequestOptions
 from functools import wraps
 import httpx
-import time
 import os
 import shutil
 
