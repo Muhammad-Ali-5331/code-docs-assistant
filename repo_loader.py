@@ -1,6 +1,7 @@
 import zipfile
 import requests
 import os
+import re
 import shutil
 from langchain_community.document_loaders import TextLoader
 
@@ -11,9 +12,12 @@ def clone_repo(repo_url, clone_path="target_repo"):
         shutil.rmtree(clone_path, ignore_errors=True)
     parts = repo_url.rstrip("/").rstrip(".git").split("/")
     owner, repo_name = parts[-2], parts[-1]
+    safe_repo_name = os.path.basename(repo_name)
+    if safe_repo_name != repo_name or not re.fullmatch(r"[A-Za-z0-9_.-]+", safe_repo_name):
+        raise ValueError("Invalid repository name")
     zip_path = f"{clone_path}_temp.zip"
     for branch in ["main", "master","dev","develop","development","release","prod","production","trunk","stable","default","staging"]:
-        zip_url = f"https://github.com/{owner}/{repo_name}/archive/{branch}.zip"
+        zip_url = f"https://github.com/{owner}/{safe_repo_name}/archive/{branch}.zip"
         response = requests.get(zip_url,stream=True)
         if response.status_code == 200:
             with open(zip_path, "wb") as f:
@@ -21,7 +25,10 @@ def clone_repo(repo_url, clone_path="target_repo"):
                    f.write(chunk)
             with zipfile.ZipFile(zip_path, "r") as zip_ref:
                 zip_ref.extractall(".")
-            extracted_folder = f"{repo_name}-{branch}"
+            extracted_folder = os.path.abspath(f"{safe_repo_name}-{branch}")
+            current_dir = os.path.abspath(".")
+            if not extracted_folder.startswith(f"{current_dir}{os.sep}"):
+                raise ValueError("Invalid extracted repository path")
             os.rename(extracted_folder, clone_path)
             os.remove(zip_path)
             print(f"Repository downloaded and extracted to {clone_path}")
