@@ -3,7 +3,7 @@ from repo_loader import clone_repo, load_code_files
 from chunker import create_chunks
 from vector_store import create_vectorstore,load_existing_vectorstore
 from qa_chain import build_qa_chain, ask_question
-from firestore_helpers import create_project, get_user_projects,save_chat, get_user_project,get_project_chats,delete_user_project,MAX_FREE_PROJECTS
+from firestore_helpers import create_project, get_user_projects,save_chat, get_user_project,get_project_chats,delete_user_project,find_existing_project,MAX_FREE_PROJECTS
 from clerk_backend_api import Clerk, AuthenticateRequestOptions
 from functools import wraps
 import httpx
@@ -15,7 +15,6 @@ clerk = Clerk(bearer_auth=os.getenv("CLERK_SECRET_KEY"))
 app = Flask(__name__)
 
 rag_chains = dict()  # Initialize as an empty dictionary to hold RAG chains for different users/projects
-last_active_project = dict()  # Initialize as an empty dictionary to hold the last active project for each user
 
 def require_auth(f):
     @wraps(f)
@@ -69,7 +68,6 @@ def openProjects(project_id):
             chroma_path = data["chroma_path"]
             vectorStore_obj = load_existing_vectorstore(chroma_path)
             rag_chains[(clerk_user_id,project_id)] = build_qa_chain(vectorStore_obj)
-            last_active_project[clerk_user_id] = project_id
             chat_list = get_project_chats(clerk_user_id,project_id)
             return jsonify({"status":"success","chats":chat_list})
         else: 
@@ -116,6 +114,14 @@ def process_repo():
         clerk_user_id = request.clerk_user_id
         data = request.json
         repo_url = data.get("repo_url")
+
+        # Check if the project already exists for the user
+        existing_project_id = find_existing_project(clerk_user_id, repo_url)
+        if existing_project_id is not None:
+            # If the project already exists, return a response indicating that the repo is already indexed
+            return jsonify({ "status": "exists", "project_id": existing_project_id, "message": "This repo is already indexed. Opening existing project." })
+        
+        # If the project does not exist, create a new project
         result = create_project(clerk_user_id, repo_url)
         if result is None: return jsonify({"status": "error", "message": f"User has reached the limit of {MAX_FREE_PROJECTS} projects."}), 403
         
@@ -138,9 +144,6 @@ def process_repo():
         # Build RAG chain and store it in the global dictionary
         rag_chains[(clerk_user_id, project_id)] = build_qa_chain(vectorstore)
 
-        # Update the last active project for the user
-        last_active_project[clerk_user_id] = project_id
-
         return jsonify({"status": "success", "project_id": project_id})
     
     except Exception as e:
@@ -149,18 +152,30 @@ def process_repo():
 @app.route("/ask", methods=["POST"])
 @require_auth
 def ask():
+    """Handle a question asked by the user for a specific project."""
     try:
         clerk_user_id = request.clerk_user_id
-        project_id = last_active_project.get(clerk_user_id)
-        if project_id is None:
-            return jsonify({"status": "error", "message": "No active project found for the user."}), 400
-        curr_rag_chain = rag_chains.get((clerk_user_id, project_id))
-        if curr_rag_chain is None:
-            return jsonify({"status": "error", "message": "RAG chain not found for the specified user and project."}), 400
         data = request.json
+
+        project_id = data.get("project_id")
         question = data.get("question")
+
+        # Validate that both project_id and question are provided in the request
+        if not project_id or not question:
+            return jsonify({"status": "error", "message": "Missing project_id or question in the request."}), 400
+        
+        # Retrieve the current RAG chain for the user and project from the global dictionary
+        curr_rag_chain = rag_chains.get((clerk_user_id, project_id))
+
+        # Validate that the RAG chain exists for the given user and project
+        if curr_rag_chain is None:
+            return jsonify({"status": "error", "message": "Session expired for this project. Please reopen it."}), 400
+        
+        # Check if the user wants to stop the session
         if question.lower() == "stop":
             return jsonify({"status": "stopped"})
+        
+        # Ask the question using the RAG chain,save the chat, and return the answer
         answer = ask_question(curr_rag_chain, question)
         save_chat(clerk_user_id, project_id, question, answer)
         return jsonify({"answer": answer})
