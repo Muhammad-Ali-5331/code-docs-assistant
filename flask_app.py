@@ -96,10 +96,13 @@ def projects():
 @app.route("/projects/<project_id>", methods=["DELETE"])
 @require_auth
 def delete_project(project_id):
+    """Delete a project for the authenticated user. 
+    This includes removing the project from Firestore, deleting the cloned repository folder, and deleting the Chroma vector store folder.
+    """
     clerk_user_id = request.clerk_user_id
-    delete_user_project(clerk_user_id,project_id)
-    chroma_path = f"chroma_db_{clerk_user_id}_{project_id}"
-    target_repo_path = f"target_repo_{clerk_user_id}_{project_id}"
+    delete_user_project(clerk_user_id,project_id) # Delete the project and its data from Firestore
+    chroma_path = os.path.join(DATA_DIR, f"chroma_db_{clerk_user_id}_{project_id}")
+    target_repo_path = os.path.join(DATA_DIR, f"target_repo_{clerk_user_id}_{project_id}")
     shutil.rmtree(target_repo_path, ignore_errors=True)  # Delete the cloned repository folder
     shutil.rmtree(chroma_path, ignore_errors=True)  # Delete the chroma folder if it exists
     if (clerk_user_id, project_id) in rag_chains:
@@ -128,8 +131,8 @@ def process_repo():
         # Unpack the result tuple into project_id and chroma_path
         project_id, chroma_path = result
 
-        # Clone the repository into a unique directory based on the user ID and project ID
-        clone_path = f"target_repo_{clerk_user_id}_{project_id}"
+        # Clone the repository into a unique directory based on the user ID, project ID and the data directory 
+        clone_path = os.path.join(DATA_DIR, f"target_repo_{clerk_user_id}_{project_id}")
         clone_repo(repo_url, clone_path)
 
         # Load code files

@@ -1,6 +1,8 @@
 from firestore_client import db
 from datetime import datetime
+from configPath import DATA_DIR
 import uuid
+import os
 
 MAX_FREE_PROJECTS = 3  # Maximum number of free projects allowed per user
 
@@ -24,7 +26,7 @@ def create_project(clerk_user_id, repo_url):
         return None  # User has reached the limit of 3 projects
     
     new_project_id = uuid.uuid4().hex[:8]  # Generate a new project ID
-    final_chroma_path = f"chroma_db_{clerk_user_id}_{new_project_id}"  # Define the path for Chroma data
+    final_chroma_path = os.path.join(DATA_DIR, f"chroma_db_{clerk_user_id}_{new_project_id}")  # Define the path for Chroma data
     
     # Save the new project details in Firestore under the user's projects sub-collection
     new_project = db.collection("users").document(clerk_user_id).collection("projects").document(new_project_id)
