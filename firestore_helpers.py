@@ -1,8 +1,6 @@
 from firestore_client import db
 from datetime import datetime
-from configPath import DATA_DIR
 import uuid
-import os
 
 MAX_FREE_PROJECTS = 3  # Maximum number of free projects allowed per user
 
