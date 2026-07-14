@@ -4,7 +4,6 @@ from chunker import create_chunks
 from vector_store import create_vectorstore,load_existing_vectorstore
 from qa_chain import build_qa_chain, ask_question
 from firestore_helpers import create_project, get_user_projects,save_chat, get_user_project,get_project_chats,delete_user_project,find_existing_project,MAX_FREE_PROJECTS
-from configPath import DATA_DIR
 from clerk_backend_api import Clerk, AuthenticateRequestOptions
 from functools import wraps
 import httpx
@@ -101,8 +100,8 @@ def delete_project(project_id):
     """
     clerk_user_id = request.clerk_user_id
     delete_user_project(clerk_user_id,project_id) # Delete the project and its data from Firestore
-    chroma_path = os.path.join(DATA_DIR, f"chroma_db_{clerk_user_id}_{project_id}")
-    target_repo_path = os.path.join(DATA_DIR, f"target_repo_{clerk_user_id}_{project_id}")
+    chroma_path = f"chroma_db_{clerk_user_id}_{project_id}"
+    target_repo_path = f"target_repo_{clerk_user_id}_{project_id}"
     shutil.rmtree(target_repo_path, ignore_errors=True)  # Delete the cloned repository folder
     shutil.rmtree(chroma_path, ignore_errors=True)  # Delete the chroma folder if it exists
     if (clerk_user_id, project_id) in rag_chains:
@@ -131,8 +130,8 @@ def process_repo():
         # Unpack the result tuple into project_id and chroma_path
         project_id, chroma_path = result
 
-        # Clone the repository into a unique directory based on the user ID, project ID and the data directory 
-        clone_path = os.path.join(DATA_DIR, f"target_repo_{clerk_user_id}_{project_id}")
+        # Clone the repository into a unique directory based on the user ID and project ID to avoid conflicts
+        clone_path = f"target_repo_{clerk_user_id}_{project_id}"
         clone_repo(repo_url, clone_path)
 
         # Load code files
