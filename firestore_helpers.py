@@ -62,3 +62,11 @@ def delete_user_project(clerk_user_id, project_id):
     for chat in project_ref.collection("chats").get():  # Fetch all chat documents in the project's chats sub-collection
         chat.reference.delete()  # Delete each chat document in the project's chats sub-collection
     project_ref.delete()  # Delete the project document from Firestore
+
+def find_existing_project(clerk_user_id, repo_url):
+    """Check if this user already has a project for this exact repo_url."""
+    projects = db.collection("users").document(clerk_user_id).collection("projects")
+    query = projects.where("repo_url", "==", repo_url).limit(1).get()
+    for doc in query:
+        return doc.id  # project_id mil gaya
+    return None
