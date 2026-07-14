@@ -4,7 +4,7 @@ langchain-ollama
 langchain-classic
 langchain-text-splitters
 chromadb
-GitPython
+requests
 langchain-groq
 python-dotenv
 langchain-huggingface
