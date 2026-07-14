@@ -1,24 +1,32 @@
+import zipfile
+import requests
 import os
-import stat
 import shutil
-from git import Repo
 from langchain_community.document_loaders import TextLoader
-
-
-def remove_readonly(func, path, exc_info):
-    """Clear the readonly bit and reattempt the removal."""
-    os.chmod(path, stat.S_IWRITE)
-    func(path)
 
 def clone_repo(repo_url, clone_path="target_repo"):
     """Clone a Git repository to a specified path, removing the existing directory if it exists."""
     if os.path.exists(clone_path):
         print(f"Removing existing directory: {clone_path}")
-        shutil.rmtree(clone_path, onexc=remove_readonly)
-    print(f"Cloning repository from {repo_url} to {clone_path}....")
-    Repo.clone_from(repo_url, clone_path)
-    print(f"Repository cloned successfully to {clone_path}")
-    return clone_path
+        shutil.rmtree(clone_path, ignore_errors=True)
+    parts = repo_url.rstrip("/").rstrip(".git").split("/")
+    owner, repo_name = parts[-2], parts[-1]
+    zip_path = f"{clone_path}_temp.zip"
+    for branch in ["main", "master","dev","develop","development","release","prod","production","trunk","stable","default","staging"]:
+        zip_url = f"https://github.com/{owner}/{repo_name}/archive/{branch}.zip"
+        response = requests.get(zip_url,stream=True)
+        if response.status_code == 200:
+            with open(zip_path, "wb") as f:
+               for chunk in response.iter_content(chunk_size=8192):
+                   f.write(chunk)
+            with zipfile.ZipFile(zip_path, "r") as zip_ref:
+                zip_ref.extractall(".")
+            extracted_folder = f"{repo_name}-{branch}"
+            os.rename(extracted_folder, clone_path)
+            os.remove(zip_path)
+            print(f"Repository downloaded and extracted to {clone_path}")
+            return clone_path
+    raise Exception(f"Could not download repo (tried main/master branches): {repo_url}")
 
 def load_code_files(repo_path):
     """Load code files from the cloned repository, ignoring certain directories and file types."""
@@ -130,8 +138,3 @@ def load_code_files(repo_path):
                 except Exception as e:
                     print(f"Skipping {file_path}: {e}")
     return documents
-if __name__ == "__main__":
-    test_repo_url = "https://github.com/Muhammad-Ali-5331/skills-code-with-codespaces"
-    path = clone_repo(test_repo_url)
-    documents = load_code_files(path)
-    print(f"Loaded {len(documents)} documents from the repository.")

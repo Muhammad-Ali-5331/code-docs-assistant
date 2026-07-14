@@ -28,5 +28,4 @@ def create_vectorstore(chunks, persist_directory="./chroma_db"):
 
 def load_existing_vectorstore(persist_directory):
     """Load an already-existing Chroma vector store from disk (no new documents)."""
-    
     return Chroma(persist_directory=persist_directory,embedding_function=_embedding_model)
