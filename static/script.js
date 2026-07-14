@@ -36,7 +36,6 @@ async function getFreshToken() {
   return await window.Clerk.session.getToken();
 }
 
-// (2) Clear "you must sign in" gate — shown over the new-project panel when signed out
 function lockApp() {
   isSignedIn = false;
   cloneBtn.disabled = true;
@@ -93,7 +92,7 @@ const waitForClerk = setInterval(async () => {
       lockApp();
       signInBtn.classList.remove("hidden");
       userButtonSlot.classList.add("hidden");
-      renderProjectList(); // show "sign in to see projects" state
+      renderProjectList();
     }
   }
 }, 100);
@@ -158,7 +157,7 @@ newChatBtn.addEventListener("click", () => {
   closeSide();
 });
 
-// ===== (1) Load the user's project list into the sidebar, with a loading state =====
+// ===== Load the user's project list into the sidebar, with a loading state =====
 async function loadProjects() {
   projectList.innerHTML = `
     <div class="project-loading">
@@ -213,7 +212,7 @@ function renderProjectList() {
       <button class="project-delete-btn" title="Delete project" data-id="${p.project_id}">🗑</button>
     `;
     item.addEventListener("click", (e) => {
-      if (e.target.closest(".project-delete-btn")) return; // don't open when clicking delete
+      if (e.target.closest(".project-delete-btn")) return;
       openProject(p.project_id, repoName);
     });
     const delBtn = item.querySelector(".project-delete-btn");
@@ -235,7 +234,7 @@ function formatDate(value) {
   }
 }
 
-// ===== (6) Delete a project =====
+// ===== Delete a project =====
 function confirmDeleteProject(projectId, repoName) {
   const ok = window.confirm(`Delete "${repoName}"? This cannot be undone.`);
   if (!ok) return;
@@ -243,11 +242,10 @@ function confirmDeleteProject(projectId, repoName) {
 }
 
 async function deleteProject(projectId) {
-  // Play the shrink/fade-out animation on this specific item first
   const item = document.querySelector(`.project-delete-btn[data-id="${projectId}"]`)?.closest(".project-item");
   if (item) {
     item.classList.add("deleting");
-    await new Promise((resolve) => setTimeout(resolve, 350)); // matches the CSS animation duration
+    await new Promise((resolve) => setTimeout(resolve, 350));
   }
 
   try {
@@ -261,12 +259,12 @@ async function deleteProject(projectId) {
     if (data.status === "success") {
       projectsCache = projectsCache.filter((p) => p.project_id !== projectId);
       if (activeProjectId === projectId) {
-        newChatBtn.click(); // bounce back to the "new project" screen
+        newChatBtn.click();
       } else {
         renderProjectList();
       }
     } else {
-      if (item) item.classList.remove("deleting"); // restore it since delete failed
+      if (item) item.classList.remove("deleting");
       alert("Could not delete project: " + (data.message || "Unknown error"));
     }
   } catch (err) {
@@ -302,7 +300,6 @@ async function openProject(projectId, repoName) {
       if (chats.length === 0) {
         addSystemMessage("✨ This project is ready — ask your first question!");
       } else {
-        // (3) Use each chat's own saved timestamp, not "now"
         chats.forEach((c) => {
           addUserMessage(c.question, false, c.timestamp);
           addAssistantMessageInstant(c.answer, [], false, c.timestamp);
@@ -332,7 +329,7 @@ function resetSteps() {
   setStep(stepVector, null);
 }
 
-// ===== Index a new repository =====
+// ===== Index a new repository (handles success / already-exists / error) =====
 cloneBtn.addEventListener("click", async () => {
   const repoUrl = repoUrlInput.value.trim();
   if (!repoUrl || !isSignedIn) return;
@@ -359,11 +356,19 @@ cloneBtn.addEventListener("click", async () => {
     setStep(stepParse, "complete");
     setStep(stepVector, "active");
 
+    const repoName = repoUrl.split("/").filter(Boolean).slice(-1)[0];
+
+    if (data.status === "exists") {
+      // This repo was already indexed before — just open the existing project instead
+      setStep(stepVector, "complete");
+      await loadProjects();
+      openProject(data.project_id, repoName);
+      return;
+    }
+
     if (data.status === "success") {
       setStep(stepVector, "complete");
       activeProjectId = data.project_id;
-
-      const repoName = repoUrl.split("/").filter(Boolean).slice(-1)[0];
       topTitle.textContent = repoName;
 
       await loadProjects();
@@ -376,7 +381,6 @@ cloneBtn.addEventListener("click", async () => {
       questionInput.disabled = false;
       sendBtn.disabled = false;
     } else {
-      // (5) Reset the step indicators cleanly instead of leaving them "stuck" mid-animation
       resetSteps();
       showInlineError(data.message || "Could not process this repository.");
     }
@@ -389,7 +393,6 @@ cloneBtn.addEventListener("click", async () => {
   }
 });
 
-// (5) Show a styled inline error banner instead of a native alert() that can leave the UI mid-state
 function showInlineError(message) {
   let banner = document.getElementById("newProjectError");
   if (!banner) {
@@ -421,7 +424,6 @@ function stopTimer() {
   timerInterval = null;
 }
 
-// (4) Always fully reset the composer UI, whatever happens
 function resetComposerUI() {
   questionInput.disabled = false;
   sendBtn.disabled = false;
@@ -435,7 +437,7 @@ async function sendQuestion() {
   const question = questionInput.value.trim();
   if (!question || !activeProjectId) return;
 
-  addUserMessage(question); // live message -> stamped with "now"
+  addUserMessage(question);
   questionInput.value = "";
   questionInput.disabled = true;
   sendBtn.disabled = true;
@@ -455,7 +457,7 @@ async function sendQuestion() {
         "Content-Type": "application/json",
         Authorization: `Bearer ${token}`,
       },
-      body: JSON.stringify({ question }),
+      body: JSON.stringify({ project_id: activeProjectId, question }),
       signal: currentAbortController.signal,
     });
     const data = await response.json();
@@ -473,12 +475,14 @@ async function sendQuestion() {
     processingRow.remove();
 
     if (err.name === "AbortError") {
-      // Tell the backend we stopped waiting — it does NOT clear the session,
-      // so the next question in this project still works normally.
       getFreshToken().then((token) => {
         fetch("/stop", {
           method: "POST",
-          headers: { Authorization: `Bearer ${token}` },
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${token}`,
+          },
+          body: JSON.stringify({ project_id: activeProjectId }),
         }).catch(() => {});
       });
       addSystemMessage("⏹ Response stopped.", true);
@@ -504,7 +508,6 @@ function formatTimestamp(isoString) {
   return d.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
 }
 
-// (3) Accept an optional saved timestamp; defaults to "now" for live messages
 function addUserMessage(text, animate = true, savedTimestamp = null) {
   const row = document.createElement("div");
   row.className = "msg user";
