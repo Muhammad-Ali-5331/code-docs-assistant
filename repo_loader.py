@@ -12,7 +12,7 @@ def clone_repo(repo_url, clone_path="target_repo"):
     parts = repo_url.rstrip("/").rstrip(".git").split("/")
     owner, repo_name = parts[-2], parts[-1]
     zip_path = f"{clone_path}_temp.zip"
-    for branch in ["main", "master"]:
+    for branch in ["main", "master","dev","develop","development","release","prod","production","trunk","stable","default","staging"]:
         zip_url = f"https://github.com/{owner}/{repo_name}/archive/{branch}.zip"
         response = requests.get(zip_url,stream=True)
         if response.status_code == 200:
