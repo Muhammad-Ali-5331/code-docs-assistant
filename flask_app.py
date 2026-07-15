@@ -8,9 +8,7 @@ from qa_chain import build_qa_chain, ask_question
 from firestore_helpers import create_project, get_user_projects,save_chat, get_user_project,get_project_chats,delete_user_project,find_existing_project,MAX_FREE_PROJECTS
 from clerk_backend_api import Clerk, AuthenticateRequestOptions
 from functools import wraps
-import httpx
-import os
-import shutil
+import httpx,os,shutil
 
 clerk = Clerk(bearer_auth=os.getenv("CLERK_SECRET_KEY"))
 app = Flask(__name__)
