@@ -198,13 +198,11 @@ def ask():
     except Exception as e:
         return jsonify({"status": "error", "message": f"Failed to retrieve user or project information: {str(e)}"}), 400
 
-
 @app.route("/stop", methods=["POST"])
 @require_auth
 def stop():
     """Stop the current RAG chain for the user and project."""
     return jsonify({"status": "stopped"})
-
 
 if __name__ == "__main__":
     port = int(os.getenv("PORT", 5000))
