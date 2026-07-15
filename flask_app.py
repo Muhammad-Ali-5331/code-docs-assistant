@@ -1,4 +1,6 @@
 from flask import Flask, render_template, request, jsonify,send_from_directory
+from flask_limiter import Limiter
+from flask_limiter.util import get_remote_address
 from repo_loader import clone_repo, load_code_files
 from chunker import create_chunks
 from vector_store import create_vectorstore,load_existing_vectorstore
@@ -6,12 +8,17 @@ from qa_chain import build_qa_chain, ask_question
 from firestore_helpers import create_project, get_user_projects,save_chat, get_user_project,get_project_chats,delete_user_project,find_existing_project,MAX_FREE_PROJECTS
 from clerk_backend_api import Clerk, AuthenticateRequestOptions
 from functools import wraps
-import httpx
-import os
-import shutil
+import httpx,os,shutil
 
 clerk = Clerk(bearer_auth=os.getenv("CLERK_SECRET_KEY"))
 app = Flask(__name__)
+
+limiter = Limiter(
+    get_remote_address,
+    app=app,
+    default_limits=["200 per day", "50 per hour"],  # global default
+    storage_uri="memory://",
+)
 
 rag_chains = dict()  # Initialize as an empty dictionary to hold RAG chains for different users/projects
 
@@ -41,12 +48,17 @@ def require_auth(f):
         return f(*args, **kwargs)
     return decorated
 
+@app.errorhandler(429)
+def ratelimit_handler(e):
+    return jsonify({"status": "error", "message": "Too many requests. Please slow down and try again in a while."}), 429
+
 @app.route('/favicon.ico')
 def favicon():
     """Serve the favicon.ico file from the static directory."""
     return send_from_directory(os.path.join(app.root_path, 'static'), 'favicon.ico', mimetype='image/vnd.microsoft.icon')
 
 @app.route('/login')
+@limiter.limit("20 per hour")
 def login(): 
     """Render the login page."""
     return render_template("login.html")
@@ -109,6 +121,7 @@ def delete_project(project_id):
     return jsonify({"status": "success"})
 @app.route("/process_repo", methods=["POST"])
 @require_auth
+@limiter.limit("3 per hour; 10 per day")
 def process_repo():
     """Process the repository URL provided by the user. 
     This includes cloning the repo, loading code files, creating chunks, creating a vector store, and building a RAG chain."""
@@ -153,6 +166,7 @@ def process_repo():
 
 @app.route("/ask", methods=["POST"])
 @require_auth
+@limiter.limit("15 per hour")
 def ask():
     """Handle a question asked by the user for a specific project."""
     try:
@@ -184,13 +198,11 @@ def ask():
     except Exception as e:
         return jsonify({"status": "error", "message": f"Failed to retrieve user or project information: {str(e)}"}), 400
 
-
 @app.route("/stop", methods=["POST"])
 @require_auth
 def stop():
     """Stop the current RAG chain for the user and project."""
     return jsonify({"status": "stopped"})
-
 
 if __name__ == "__main__":
     port = int(os.getenv("PORT", 5000))
