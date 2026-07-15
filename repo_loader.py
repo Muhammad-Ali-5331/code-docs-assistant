@@ -2,6 +2,7 @@ import os
 import stat
 import shutil
 from git import Repo
+from git.exc import GitCommandError
 from langchain_community.document_loaders import TextLoader
 
 def remove_readonly(func, path, exc_info):
@@ -15,7 +16,10 @@ def clone_repo(repo_url, clone_path="target_repo"):
         print(f"Removing existing directory: {clone_path}")
         shutil.rmtree(clone_path, onexc=remove_readonly)
     print(f"Cloning repository from {repo_url} to {clone_path}....")
-    Repo.clone_from(repo_url, clone_path)
+    try:
+        Repo.clone_from(repo_url, clone_path)
+    except GitCommandError as e:
+        raise Exception("Could not fetch this repository. Please make sure the URL is correct and the repository is public.")
     print(f"Repository cloned successfully to {clone_path}")
     return clone_path
 
