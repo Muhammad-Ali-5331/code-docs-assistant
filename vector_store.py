@@ -1,8 +1,13 @@
-from langchain_huggingface import HuggingFaceEmbeddings
+from langchain_huggingface import HuggingFaceInferenceAPIEmbeddings
 from langchain_community.vectorstores import Chroma
 import os
+
 # Create the embedding model using HugginFaceEmbeddings with the specified model
-_embedding_model = HuggingFaceEmbeddings(model_name="sentence-transformers/all-MiniLM-L6-v2")
+_embedding_model = HuggingFaceInferenceAPIEmbeddings(
+    api_key=os.getenv("HF_API_TOKEN"),
+    model_name="sentence-transformers/all-MiniLM-L6-v2"
+)
+
 def create_vectorstore(chunks, persist_directory="./chroma_db"):
     """Create a Chroma vector store from the given chunks and persist it to the specified directory.
     If the persist directory does not exist, it will be created."""

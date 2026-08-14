@@ -8,7 +8,6 @@ GitPython
 langchain-groq
 python-dotenv
 langchain-huggingface
-sentence-transformers
 firebase-admin
 flask
 clerk-backend-api
