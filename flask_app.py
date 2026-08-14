@@ -75,6 +75,11 @@ def favicon():
     """Serve the favicon.ico file from the static directory."""
     return send_from_directory(os.path.join(app.root_path, 'static'), 'favicon.ico', mimetype='image/vnd.microsoft.icon')
 
+@app.route("/health")
+def health():
+    """Lightweight endpoint for service health monitoring."""
+    return jsonify({"status": "ok"}), 200
+
 @app.route('/login')
 @limiter.limit("20 per hour")
 def login(): 
