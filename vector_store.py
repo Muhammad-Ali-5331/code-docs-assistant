@@ -3,9 +3,12 @@ from langchain_community.vectorstores import Chroma
 import os
 
 # Create the embedding model using HugginFaceEmbeddings with the specified model
-_embedding_model = HuggingFaceInferenceAPIEmbeddings(
-    api_key=os.getenv("HF_API_TOKEN"),
-    model_name="sentence-transformers/all-MiniLM-L6-v2"
+
+model_name = "sentence-transformers/all-MiniLM-L6-v2"
+API_KEY = os.getenv("HF_API_TOKEN")
+_embedding_model = HuggingFaceEndpointEmbeddings(
+    model=model_name,
+    huggingfacehub_api_token=API_KEY,
 )
 
 def create_vectorstore(chunks, persist_directory="./chroma_db"):
