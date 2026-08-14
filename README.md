@@ -21,6 +21,7 @@ CodeChat lets you point at any public GitHub repository and ask questions about 
 - ⚡ **Fast Inference** — powered by Groq's LLaMA 3 for near-instant responses
 - 🎨 **Polished UI** — smooth animations, typewriter-style responses, live "thinking" indicators, and a fully responsive mobile layout
 - ⏹️ **Stoppable Responses** — cancel an in-progress answer without breaking your session
+- 🩺 **Health Check Endpoint** — lightweight `/health` route for uptime monitoring
 
 ---
 
@@ -29,7 +30,7 @@ CodeChat lets you point at any public GitHub repository and ask questions about 
 | Layer | Technology |
 |---|---|
 | **Backend** | Flask (Python), Gunicorn |
-| **AI / RAG** | LangChain, Groq (LLaMA 3), HuggingFace Sentence Transformers |
+| **AI / RAG** | LangChain, Groq (LLaMA 3), HuggingFace Inference API (embeddings) |
 | **Vector Store** | ChromaDB |
 | **Auth** | Clerk |
 | **Database** | Firebase Firestore |
@@ -37,6 +38,7 @@ CodeChat lets you point at any public GitHub repository and ask questions about 
 | **Rate Limiting** | Flask-Limiter |
 | **Frontend** | Vanilla JavaScript, CSS (no framework) |
 | **Deployment** | Docker on Railway |
+| **CI/CD** | GitHub Actions (tests on PR, automated releases on tag push) |
 
 ---
 
@@ -52,13 +54,14 @@ User → Clerk (Auth) → Flask Backend
          chats)             │         inference)
                              ▼
                     Chunking + Embedding
+                       (HF Inference API)
                              │
                              ▼
                         ChromaDB
                     (vector storage)
 ```
 
-**Flow:** A user submits a repo URL → the backend clones it → source files are chunked and embedded → embeddings are stored in ChromaDB → when a question is asked, relevant chunks are retrieved and passed to Groq's LLaMA 3 model → the answer is streamed back and saved to Firestore for future reference.
+**Flow:** A user submits a repo URL → the backend clones it → source files are chunked and embedded via HuggingFace's hosted Inference API → embeddings are stored in ChromaDB → when a question is asked, relevant chunks are retrieved and passed to Groq's LLaMA 3 model → the answer is streamed back and saved to Firestore for future reference.
 
 ---
 
@@ -67,7 +70,7 @@ User → Clerk (Auth) → Flask Backend
 ### Prerequisites
 - Python 3.13+
 - Git
-- Accounts for: [Clerk](https://clerk.com), [Groq](https://console.groq.com), [Firebase](https://console.firebase.google.com)
+- Accounts for: [Clerk](https://clerk.com), [Groq](https://console.groq.com), [Firebase](https://console.firebase.google.com), [Hugging Face](https://huggingface.co)
 
 ### Installation
 
@@ -89,12 +92,14 @@ User → Clerk (Auth) → Flask Backend
    ```
    GROQ_API_KEY=your_groq_api_key
    CLERK_SECRET_KEY=your_clerk_secret_key
-   FIREBASE_CREDENTIALS_PATH=firebase-credentials.json
+   HF_API_TOKEN=your_huggingface_api_token
+   FIREBASE_CREDENTIALS_JSON=your_firebase_service_account_json
    ```
+   > **Note:** `firestore_client.py` reads the Firebase service account as a JSON string
+   > from `FIREBASE_CREDENTIALS_JSON`, not a file path — make sure your `.env` value is
+   > the full JSON content (as a single-line string), not a path to a file.
 
-4. Add your Firebase service account key as `firebase-credentials.json` in the project root
-
-5. Run the app
+4. Run the app
    ```bash
    python flask_app.py
    ```
@@ -118,10 +123,17 @@ This project ships with a `Dockerfile` for reliable, reproducible deployments (i
 4. Set the following environment variables in Railway's dashboard:
    - `GROQ_API_KEY`
    - `CLERK_SECRET_KEY`
+   - `HF_API_TOKEN`
    - `FIREBASE_CREDENTIALS_JSON` (paste the full service account JSON as a single value)
 5. Deploy — Railway will build the image and expose a public URL
 
 > **Note:** By default, the filesystem is ephemeral — indexed repos and vector stores won't survive a restart unless a [Railway Volume](https://docs.railway.com/volumes) is attached.
+
+### Keeping the free-tier deployment awake
+
+Railway's free plan requires serverless mode, which scales the container to zero after ~10 minutes of inactivity. A `/health` endpoint is included for use with an uptime monitor (e.g. [UptimeRobot](https://uptimerobot.com)) pinging every 5 minutes to keep it warm.
+
+⚠️ This is a workaround, not a permanent fix — it works against the platform's intended idle-scaling behavior and will consume free-tier usage/compute allocation faster. For real production uptime, upgrading to a paid Railway plan (which allows disabling serverless mode) is the correct long-term approach.
 
 ---
 
@@ -141,6 +153,7 @@ This project ships with a `Dockerfile` for reliable, reproducible deployments (i
 ├── static/                   # CSS & JavaScript
 ├── Dockerfile
 ├── requirements.txt
+├── requirements-dev.txt      # Dev/test-only dependencies
 └── .env                      # Local environment variables (not committed)
 ```
 
@@ -158,10 +171,11 @@ This project ships with a `Dockerfile` for reliable, reproducible deployments (i
 
 ## 🗺️ Roadmap
 
-- [ ] Persistent storage via Railway Volumes
+- [ ] Persistent storage via Railway Volumes ([tracking issue](https://github.com/Muhammad-Ali-5331/code-docs-assistant/issues))
 - [ ] Support for branch selection (beyond `main`/`master`)
 - [ ] Streaming responses (token-by-token)
 - [ ] Paid tiers with higher project/chat limits
+- [ ] Expand test coverage beyond core logic
 
 ---
 
